@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Water Compact Review API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: documents
+    description: Compact document registry
+  - name: candidates
+    description: Reform-action candidates
+  - name: anchors
+    description: Source anchors and rectangles
+  - name: relationships
+    description: Candidate relationships
+  - name: stats
+    description: Summary statistics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +34,550 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: List all registered compact documents
+      responses:
+        "200":
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+
+  /documents/{documentId}:
+    get:
+      operationId: getDocument
+      tags: [documents]
+      summary: Get a single document by ID
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Document metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "404":
+          description: Not found
+
+  /candidates:
+    get:
+      operationId: listCandidates
+      tags: [candidates]
+      summary: List reform-action candidates with optional filters
+      parameters:
+        - name: country
+          in: query
+          schema:
+            type: string
+        - name: stream
+          in: query
+          schema:
+            type: string
+        - name: inclusion_decision
+          in: query
+          schema:
+            type: string
+        - name: confidence_level
+          in: query
+          schema:
+            type: string
+        - name: anchor_confidence
+          in: query
+          schema:
+            type: string
+        - name: reform_aspiration_status
+          in: query
+          schema:
+            type: string
+        - name: reform_type_tier_1
+          in: query
+          schema:
+            type: string
+        - name: human_review_status
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Free-text search across candidate_id, standardized action, actor, domain, source text
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: number
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: number
+            default: 50
+      responses:
+        "200":
+          description: Paginated candidate list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CandidateListResponse"
+
+  /candidates/{candidateId}:
+    get:
+      operationId: getCandidate
+      tags: [candidates]
+      summary: Get a single candidate with all anchors
+      parameters:
+        - name: candidateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Candidate detail with anchors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CandidateDetail"
+        "404":
+          description: Not found
+
+  /anchors/{anchorId}:
+    get:
+      operationId: getAnchor
+      tags: [anchors]
+      summary: Get a single anchor with its rectangles
+      parameters:
+        - name: anchorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Anchor with rectangles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnchorDetail"
+        "404":
+          description: Not found
+
+  /relationships:
+    get:
+      operationId: listRelationships
+      tags: [relationships]
+      summary: List relationships for a candidate
+      parameters:
+        - name: candidateId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of relationships
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Relationship"
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [stats]
+      summary: Summary counts and breakdowns
+      responses:
+        "200":
+          description: Stats summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    Document:
+      type: object
+      required:
+        - document_id
+        - country
+        - document_title
+        - document_version
+        - local_filename
+        - official_source_url
+        - sha256
+        - file_size_bytes
+        - page_count
+        - page_numbering_basis
+        - anchor_coordinate_system
+        - generated_at_utc
+      properties:
+        document_id:
+          type: string
+        country:
+          type: string
+        document_title:
+          type: string
+        document_version:
+          type: string
+        local_filename:
+          type: string
+        official_source_url:
+          type: string
+        sha256:
+          type: string
+        file_size_bytes:
+          type: number
+        page_count:
+          type: number
+        page_numbering_basis:
+          type: string
+        pdf_creator:
+          type: ["string", "null"]
+        pdf_producer:
+          type: ["string", "null"]
+        pdf_creation_date:
+          type: ["string", "null"]
+        pdf_modified_date:
+          type: ["string", "null"]
+        anchor_coordinate_system:
+          type: string
+        generated_at_utc:
+          type: string
+
+    Candidate:
+      type: object
+      required:
+        - candidate_id
+        - country
+        - source_reference
+        - compact_form
+        - original_compact_text
+        - standardized_candidate_reform_action
+        - detailed_description
+        - candidate_stream
+        - inclusion_decision
+        - reform_action_tag
+        - count_in_reform_total
+        - confidence_level
+        - decision_rationale
+        - water_security_pillar
+        - solution_area
+        - reform_type_tier_1
+        - reform_type_tier_2
+        - responsible_entity
+        - human_review_status
+        - reform_aspiration_status
+        - criterion_assessment
+      properties:
+        candidate_id:
+          type: string
+        country:
+          type: string
+        source_reference:
+          type: string
+        compact_form:
+          type: string
+        original_compact_text:
+          type: string
+        standardized_candidate_reform_action:
+          type: string
+        detailed_description:
+          type: string
+        candidate_stream:
+          type: string
+        inclusion_decision:
+          type: string
+        reform_action_tag:
+          type: string
+        count_in_reform_total:
+          type: string
+        confidence_level:
+          type: string
+        decision_rationale:
+          type: string
+        water_security_pillar:
+          type: string
+        solution_area:
+          type: string
+        reform_type_tier_1:
+          type: string
+        reform_type_tier_2:
+          type: string
+        responsible_entity:
+          type: string
+        related_parent_id:
+          type: ["string", "null"]
+        human_review_status:
+          type: string
+        reviewer_comment:
+          type: ["string", "null"]
+        final_validated_action:
+          type: ["string", "null"]
+        reform_aspiration_status:
+          type: string
+        criterion_assessment:
+          type: string
+
+    AnchorSummary:
+      type: object
+      required:
+        - anchor_id
+        - candidate_id
+        - document_id
+        - anchor_role
+        - anchor_type
+        - source_reference
+        - page_start
+        - page_end
+        - matched_page
+        - page_label
+        - verbatim_source_text
+        - anchor_confidence
+        - human_review_status
+        - created_at_utc
+      properties:
+        anchor_id:
+          type: string
+        candidate_id:
+          type: string
+        document_id:
+          type: string
+        anchor_role:
+          type: string
+        anchor_type:
+          type: string
+        linked_candidate_id:
+          type: ["string", "null"]
+        source_reference:
+          type: string
+        page_start:
+          type: number
+        page_end:
+          type: number
+        matched_page:
+          type: number
+        page_label:
+          type: string
+        section_or_table:
+          type: ["string", "null"]
+        verbatim_source_text:
+          type: string
+        normalized_source_text:
+          type: string
+        quote_sha256:
+          type: string
+        match_method:
+          type: string
+        match_score:
+          type: ["number", "null"]
+        token_f1:
+          type: ["number", "null"]
+        token_precision:
+          type: ["number", "null"]
+        token_recall:
+          type: ["number", "null"]
+        sequence_similarity:
+          type: ["number", "null"]
+        anchor_confidence:
+          type: string
+        automated_validation_status:
+          type: string
+        human_review_status:
+          type: string
+        reviewer_comment:
+          type: ["string", "null"]
+        created_at_utc:
+          type: string
+
+    Rectangle:
+      type: object
+      required:
+        - rectangle_id
+        - anchor_id
+        - page_number
+        - x0
+        - y0
+        - x1
+        - y1
+        - x0_normalized
+        - y0_normalized
+        - x1_normalized
+        - y1_normalized
+        - page_width_points
+        - page_height_points
+        - coordinate_origin
+        - coordinate_unit
+      properties:
+        rectangle_id:
+          type: string
+        anchor_id:
+          type: string
+        page_number:
+          type: number
+        x0:
+          type: number
+        y0:
+          type: number
+        x1:
+          type: number
+        y1:
+          type: number
+        x0_normalized:
+          type: number
+        y0_normalized:
+          type: number
+        x1_normalized:
+          type: number
+        y1_normalized:
+          type: number
+        page_width_points:
+          type: number
+        page_height_points:
+          type: number
+        coordinate_origin:
+          type: string
+        coordinate_unit:
+          type: string
+
+    AnchorDetail:
+      allOf:
+        - $ref: "#/components/schemas/AnchorSummary"
+        - type: object
+          required: [rectangles]
+          properties:
+            rectangles:
+              type: array
+              items:
+                $ref: "#/components/schemas/Rectangle"
+
+    CandidateDetail:
+      allOf:
+        - $ref: "#/components/schemas/Candidate"
+        - type: object
+          required: [anchors]
+          properties:
+            anchors:
+              type: array
+              items:
+                $ref: "#/components/schemas/AnchorDetail"
+
+    CandidateListResponse:
+      type: object
+      required: [candidates, total, page, limit]
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/Candidate"
+        total:
+          type: number
+        page:
+          type: number
+        limit:
+          type: number
+
+    Relationship:
+      type: object
+      required:
+        - relationship_id
+        - source_candidate_id
+        - target_candidate_id
+        - relationship_type
+        - relationship_status
+        - human_review_status
+      properties:
+        relationship_id:
+          type: string
+        source_candidate_id:
+          type: string
+        target_candidate_id:
+          type: string
+        relationship_type:
+          type: string
+        relationship_status:
+          type: string
+        source_anchor_id:
+          type: ["string", "null"]
+        target_anchor_id:
+          type: ["string", "null"]
+        human_review_status:
+          type: string
+        reviewer_comment:
+          type: ["string", "null"]
+
+    CountByKey:
+      type: object
+      required: [key, count]
+      properties:
+        key:
+          type: string
+        count:
+          type: number
+
+    StatsResponse:
+      type: object
+      required:
+        - total_candidates
+        - total_documents
+        - total_anchors
+        - total_relationships
+        - by_country
+        - by_stream
+        - by_inclusion_decision
+        - by_confidence_level
+        - by_anchor_confidence
+        - by_human_review_status
+      properties:
+        total_candidates:
+          type: number
+        total_documents:
+          type: number
+        total_anchors:
+          type: number
+        total_relationships:
+          type: number
+        by_country:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        by_stream:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        by_inclusion_decision:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        by_confidence_level:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        by_anchor_confidence:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"
+        by_human_review_status:
+          type: array
+          items:
+            $ref: "#/components/schemas/CountByKey"

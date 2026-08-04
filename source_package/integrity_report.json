@@ -1,0 +1,54 @@
+{
+  "status": "pass",
+  "checks": {
+    "candidate_count_189": true,
+    "candidate_ids_unique": true,
+    "document_count_3": true,
+    "anchor_count_272": true,
+    "anchor_ids_unique": true,
+    "primary_candidate_anchor_count_189": true,
+    "every_candidate_has_one_primary_anchor": true,
+    "all_anchor_candidates_resolve": true,
+    "all_anchor_documents_resolve": true,
+    "all_anchors_have_rectangles": true,
+    "rectangle_count_1572": true,
+    "all_relationship_candidates_resolve": true,
+    "all_relationship_anchors_resolve": true,
+    "unresolved_count_zero": true,
+    "all_quote_hashes_valid": true,
+    "all_rectangles_positive_and_normalized": true,
+    "csv_documents_count": true,
+    "csv_candidates_count": true,
+    "csv_anchors_count": true,
+    "csv_rectangles_count": true,
+    "csv_relationships_count": true,
+    "csv_unresolved_count": true
+  },
+  "counts": {
+    "documents": 3,
+    "candidates": 189,
+    "source_anchors": 272,
+    "primary_candidate_anchors": 189,
+    "anchor_rectangles": 1572,
+    "relationships": 65,
+    "unresolved": 0,
+    "primary_anchor_confidence": {
+      "High": 154,
+      "Medium": 33,
+      "Low": 2
+    },
+    "anchor_roles": {
+      "Primary Evidence": 135,
+      "Duplicate/Sub-action Evidence": 14,
+      "Exclusion Evidence": 40,
+      "Context": 13,
+      "Aspiration": 45,
+      "Explicit Mechanism": 25
+    }
+  },
+  "document_hashes": {
+    "Water_Compact_Cambodia_2026.pdf": "0935dc3aad79c23426dc68078b1739c0c88946e2e94e18fec1bdd2bfb3b8e5d4",
+    "Water_Compact_Sierra_Leone_2026.pdf": "026c887e88362ec453d515f93e34997e715c546f3a1cceb5b609b17ecfaeed15",
+    "Water_Compact_Jamaica_2026.pdf": "24b077a5d6c0cae3021836b675ce8da2a96444f81fa249087706a5ffbce0001a"
+  }
+}

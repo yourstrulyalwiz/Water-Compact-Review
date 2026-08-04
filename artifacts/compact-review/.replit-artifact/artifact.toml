@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Water Compact Review"
+description = "A read-only review application for annotated Water Compact reform-action candidates. Lets reviewers examine each LLM-identified candidate alongside its highlighted source passage in the original Cambodia, Sierra Leone, and Jamaica Water Compact PDFs. Features a 3-panel layout: candidate list with multi-dimensional filtering, a PDF viewer with precise text highlights, and a methodology review panel showing all 24 classification variables."
+version = "1.0.0"
+id = "artifacts/compact-review"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25670
+
+[services.development]
+run = "pnpm --filter @workspace/compact-review run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/compact-review", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/compact-review/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25670"
+BASE_PATH = "/"
