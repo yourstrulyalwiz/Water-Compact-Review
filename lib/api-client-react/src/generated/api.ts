@@ -6,11 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
@@ -19,16 +23,21 @@ import type {
   AnchorDetail,
   CandidateDetail,
   CandidateListResponse,
+  CandidateReview,
+  CandidateReviewsResponse,
   Document,
   HealthStatus,
   ListCandidatesParams,
   ListRelationshipsParams,
   Relationship,
-  StatsResponse
+  ReviewerCredentials,
+  ReviewerResponse,
+  StatsResponse,
+  SubmitReviewRequest
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
-import type { ErrorType } from '../custom-fetch';
+import type { ErrorType , BodyType } from '../custom-fetch';
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -683,4 +692,296 @@ export function useGetStats<TData = Awaited<ReturnType<typeof getStats>>, TError
 
 
 
+
+export const getRegisterReviewerUrl = () => {
+
+
+
+
+  return `/api/reviewers/register`
+}
+
+/**
+ * @summary Register a new reviewer with name and PIN
+ */
+export const registerReviewer = async (reviewerCredentials: ReviewerCredentials, options?: Parameters<typeof customFetch>[1]): Promise<ReviewerResponse> => {
+
+  return customFetch<ReviewerResponse>(getRegisterReviewerUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reviewerCredentials)
+  }
+);}
+
+
+
+
+
+export const getRegisterReviewerMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerReviewer>>, TError,{data: BodyType<ReviewerCredentials>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerReviewer>>, TError,{data: BodyType<ReviewerCredentials>}, TContext> => {
+
+const mutationKey = ['registerReviewer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerReviewer>>, {data: BodyType<ReviewerCredentials>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerReviewer(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterReviewerMutationResult = NonNullable<Awaited<ReturnType<typeof registerReviewer>>>
+    export type RegisterReviewerMutationBody = BodyType<ReviewerCredentials>
+    export type RegisterReviewerMutationError = ErrorType<void>
+
+    /**
+ * @summary Register a new reviewer with name and PIN
+ */
+export const useRegisterReviewer = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerReviewer>>, TError,{data: BodyType<ReviewerCredentials>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerReviewer>>,
+        TError,
+        {data: BodyType<ReviewerCredentials>},
+        TContext
+      > => {
+      return useMutation(getRegisterReviewerMutationOptions(options));
+    }
+
+export const getLoginReviewerUrl = () => {
+
+
+
+
+  return `/api/reviewers/login`
+}
+
+/**
+ * @summary Authenticate a reviewer by name and PIN
+ */
+export const loginReviewer = async (reviewerCredentials: ReviewerCredentials, options?: Parameters<typeof customFetch>[1]): Promise<ReviewerResponse> => {
+
+  return customFetch<ReviewerResponse>(getLoginReviewerUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reviewerCredentials)
+  }
+);}
+
+
+
+
+
+export const getLoginReviewerMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof loginReviewer>>, TError,{data: BodyType<ReviewerCredentials>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof loginReviewer>>, TError,{data: BodyType<ReviewerCredentials>}, TContext> => {
+
+const mutationKey = ['loginReviewer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof loginReviewer>>, {data: BodyType<ReviewerCredentials>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  loginReviewer(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LoginReviewerMutationResult = NonNullable<Awaited<ReturnType<typeof loginReviewer>>>
+    export type LoginReviewerMutationBody = BodyType<ReviewerCredentials>
+    export type LoginReviewerMutationError = ErrorType<void>
+
+    /**
+ * @summary Authenticate a reviewer by name and PIN
+ */
+export const useLoginReviewer = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof loginReviewer>>, TError,{data: BodyType<ReviewerCredentials>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof loginReviewer>>,
+        TError,
+        {data: BodyType<ReviewerCredentials>},
+        TContext
+      > => {
+      return useMutation(getLoginReviewerMutationOptions(options));
+    }
+
+export const getListCandidateReviewsUrl = (candidateId: string,) => {
+
+
+
+
+  return `/api/candidates/${candidateId}/reviews`
+}
+
+/**
+ * @summary List all human reviews for a candidate
+ */
+export const listCandidateReviews = async (candidateId: string, options?: Parameters<typeof customFetch>[1]): Promise<CandidateReviewsResponse> => {
+
+  return customFetch<CandidateReviewsResponse>(getListCandidateReviewsUrl(candidateId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCandidateReviewsQueryKey = (candidateId: string,) => {
+    return [
+    `/api/candidates/${candidateId}/reviews`
+    ] as const;
+    }
+
+
+export const getListCandidateReviewsQueryOptions = <TData = Awaited<ReturnType<typeof listCandidateReviews>>, TError = ErrorType<unknown>>(candidateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCandidateReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCandidateReviewsQueryKey(candidateId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCandidateReviews>>> = ({ signal }) => listCandidateReviews(candidateId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: candidateId !== null && candidateId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCandidateReviews>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCandidateReviewsQueryResult = NonNullable<Awaited<ReturnType<typeof listCandidateReviews>>>
+export type ListCandidateReviewsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all human reviews for a candidate
+ */
+
+export function useListCandidateReviews<TData = Awaited<ReturnType<typeof listCandidateReviews>>, TError = ErrorType<unknown>>(
+ candidateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCandidateReviews>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCandidateReviewsQueryOptions(candidateId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitCandidateReviewUrl = (candidateId: string,) => {
+
+
+
+
+  return `/api/candidates/${candidateId}/reviews`
+}
+
+/**
+ * Reviewer identity is derived from the Bearer token issued at login/register. No reviewer_id in body.
+ * @summary Submit a review decision for a candidate
+ */
+export const submitCandidateReview = async (candidateId: string,
+    submitReviewRequest: SubmitReviewRequest, options?: Parameters<typeof customFetch>[1]): Promise<CandidateReview> => {
+
+  return customFetch<CandidateReview>(getSubmitCandidateReviewUrl(candidateId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(submitReviewRequest)
+  }
+);}
+
+
+
+
+
+export const getSubmitCandidateReviewMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCandidateReview>>, TError,{candidateId: string;data: BodyType<SubmitReviewRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitCandidateReview>>, TError,{candidateId: string;data: BodyType<SubmitReviewRequest>}, TContext> => {
+
+const mutationKey = ['submitCandidateReview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitCandidateReview>>, {candidateId: string;data: BodyType<SubmitReviewRequest>}> = (props) => {
+          const {candidateId,data} = props ?? {};
+
+          return  submitCandidateReview(candidateId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitCandidateReviewMutationResult = NonNullable<Awaited<ReturnType<typeof submitCandidateReview>>>
+    export type SubmitCandidateReviewMutationBody = BodyType<SubmitReviewRequest>
+    export type SubmitCandidateReviewMutationError = ErrorType<void>
+
+    /**
+ * @summary Submit a review decision for a candidate
+ */
+export const useSubmitCandidateReview = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCandidateReview>>, TError,{candidateId: string;data: BodyType<SubmitReviewRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitCandidateReview>>,
+        TError,
+        {candidateId: string;data: BodyType<SubmitReviewRequest>},
+        TContext
+      > => {
+      return useMutation(getSubmitCandidateReviewMutationOptions(options));
+    }
 

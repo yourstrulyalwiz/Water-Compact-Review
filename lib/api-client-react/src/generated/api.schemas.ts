@@ -60,6 +60,8 @@ export interface Candidate {
   final_validated_action?: string | null;
   reform_aspiration_status: string;
   criterion_assessment: string;
+  review_count?: number;
+  has_conflict?: boolean;
 }
 
 export interface AnchorSummary {
@@ -145,6 +147,40 @@ export interface Relationship {
   human_review_status: string;
   /** @nullable */
   reviewer_comment?: string | null;
+}
+
+export interface ReviewerCredentials {
+  display_name: string;
+  pin: string;
+}
+
+export interface ReviewerResponse {
+  reviewer_id: string;
+  display_name: string;
+  /** Signed session token. Pass as Authorization Bearer on review submissions. */
+  token: string;
+}
+
+export interface CandidateReview {
+  review_id: number;
+  candidate_id: string;
+  reviewer_id: string;
+  reviewer_name: string;
+  inclusion_decision: string;
+  /** @nullable */
+  comment?: string | null;
+  created_at: string;
+}
+
+export interface CandidateReviewsResponse {
+  reviews: CandidateReview[];
+  has_conflict: boolean;
+}
+
+export interface SubmitReviewRequest {
+  inclusion_decision: string;
+  /** @nullable */
+  comment?: string | null;
 }
 
 export interface CountByKey {

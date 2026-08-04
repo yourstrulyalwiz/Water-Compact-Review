@@ -1,22 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { 
-  useListCandidates, 
-  useGetCandidate, 
-  useGetDocument, 
+import {
+  useListCandidates,
+  useGetCandidate,
+  useGetDocument,
   useGetStats,
   useListRelationships,
-  Candidate,
-  AnchorDetail,
-  CandidateDetail
 } from '@workspace/api-client-react';
 import { PdfViewer } from '@/components/PdfViewer';
+import { ReviewerModal } from '@/components/ReviewerModal';
+import { useReviewer } from '@/hooks/use-reviewer';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLocation, useSearch } from 'wouter';
-import { ExternalLink, Search, ChevronLeft, ChevronRight, FileText, FileSignature, CheckCircle2, XCircle, AlertTriangle, Filter } from 'lucide-react';
+import {
+  ExternalLink, Search, ChevronLeft, ChevronRight, FileText, FileSignature,
+  CheckCircle2, AlertTriangle, Filter, User, Users,
+} from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -24,13 +26,53 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+interface CandidateReviewItem {
+  review_id: number;
+  candidate_id: string;
+  reviewer_id: string;
+  reviewer_name: string;
+  inclusion_decision: string;
+  comment: string | null;
+  created_at: string;
+}
+
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function getDecisionBadgeClass(decision: string): string {
+  switch (decision) {
+    case 'Accept': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    case 'Reject': return 'bg-red-100 text-red-800 border-red-200';
+    case 'Needs Discussion': return 'bg-amber-100 text-amber-800 border-amber-200';
+    default: return 'bg-slate-100 text-slate-700 border-slate-200';
+  }
+}
+
 export default function Workspace() {
   const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(useSearch());
-  
-  // State for selected items
+
   const selectedCandidateId = searchParams.get('id') || null;
   const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
+
+  // Reviewer identity
+  const { reviewer, login, logout } = useReviewer();
+  const [showReviewerModal, setShowReviewerModal] = useState(!reviewer);
+
+  // Review state
+  const [candidateReviews, setCandidateReviews] = useState<CandidateReviewItem[]>([]);
+  const [reviewsConflict, setReviewsConflict] = useState(false);
+  const [myDecision, setMyDecision] = useState('');
+  const [myRationale, setMyRationale] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   // Filters State
   const [filters, setFilters] = useState({
@@ -65,7 +107,7 @@ export default function Workspace() {
     ...(filters.reform_type_tier_1 !== 'All' && { reform_type_tier_1: filters.reform_type_tier_1 }),
     ...(filters.human_review_status !== 'All' && { human_review_status: filters.human_review_status }),
     ...(debouncedSearch && { search: debouncedSearch }),
-    limit: 500, // Load all matching for this prototype
+    limit: 500,
   };
 
   // Queries
@@ -75,7 +117,7 @@ export default function Workspace() {
   });
 
   const { data: candidateDetail, isLoading: detailLoading } = useGetCandidate(
-    selectedCandidateId || '', 
+    selectedCandidateId || '',
     { query: { enabled: !!selectedCandidateId, queryKey: ['/api/candidates', selectedCandidateId] } }
   );
 
@@ -85,7 +127,7 @@ export default function Workspace() {
   );
 
   const candidates = candidatesData?.candidates || [];
-  
+
   // Auto-select first item on load if none selected
   useEffect(() => {
     if (!selectedCandidateId && candidates.length > 0) {
@@ -104,6 +146,67 @@ export default function Workspace() {
       setActiveAnchorId(null);
     }
   }, [candidateDetail]);
+
+  // Fetch reviews when candidate or reviewer changes
+  const fetchReviews = useCallback(async (candidateId: string) => {
+    try {
+      const data = await fetch(`/api/candidates/${candidateId}/reviews`).then(r => r.json()) as {
+        reviews: CandidateReviewItem[];
+        has_conflict: boolean;
+      };
+      setCandidateReviews(data.reviews || []);
+      setReviewsConflict(data.has_conflict);
+      // Pre-fill with my latest decision
+      if (reviewer) {
+        const myReview = (data.reviews || []).find(r => r.reviewer_id === reviewer.reviewer_id);
+        if (myReview) {
+          setMyDecision(myReview.inclusion_decision);
+          setMyRationale(myReview.comment || '');
+        } else {
+          setMyDecision('');
+          setMyRationale('');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch reviews:', err);
+    }
+  }, [reviewer]);
+
+  useEffect(() => {
+    if (!selectedCandidateId) return;
+    setCandidateReviews([]);
+    setReviewsConflict(false);
+    setMyDecision('');
+    setMyRationale('');
+    setSubmitSuccess(false);
+    fetchReviews(selectedCandidateId);
+  }, [selectedCandidateId, fetchReviews]);
+
+  const submitReview = async () => {
+    if (!myDecision || !reviewer || !selectedCandidateId || submitting) return;
+    setSubmitting(true);
+    setSubmitSuccess(false);
+    try {
+      const resp = await fetch(`/api/candidates/${selectedCandidateId}/reviews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${reviewer.token}`,
+        },
+        body: JSON.stringify({
+          inclusion_decision: myDecision,
+          comment: myRationale.trim() || null,
+        }),
+      });
+      if (!resp.ok) throw new Error('Failed to submit review');
+      setSubmitSuccess(true);
+      await fetchReviews(selectedCandidateId);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const activeAnchor = candidateDetail?.anchors?.find(a => a.anchor_id === activeAnchorId);
 
@@ -133,72 +236,110 @@ export default function Workspace() {
   };
 
   const getStreamColor = (stream: string) => {
-    switch (stream) {
-      case 'A': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case 'B': return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'C': return 'bg-slate-100 text-slate-800 border-slate-200';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+    if (stream.startsWith('A')) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    if (stream.startsWith('B')) return 'bg-amber-100 text-amber-800 border-amber-200';
+    if (stream.startsWith('C')) return 'bg-slate-100 text-slate-800 border-slate-200';
+    return 'bg-gray-100 text-gray-800';
   };
+
+  const reviewedCount = candidates.filter(c => (c as any).review_count > 0).length;
 
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-background overflow-hidden font-sans">
+      {/* Reviewer Modal */}
+      {showReviewerModal && (
+        <ReviewerModal
+          onLogin={(identity) => {
+            login(identity);
+            setShowReviewerModal(false);
+          }}
+        />
+      )}
+
       {/* Header */}
-      <header className="flex-none h-12 border-b bg-card flex items-center justify-between px-4">
-        <div className="flex items-center gap-3">
+      <header className="flex-none h-12 border-b bg-card flex items-center justify-between px-4 gap-3">
+        <div className="flex items-center gap-3 flex-none">
           <FileSignature className="w-5 h-5 text-primary" />
           <h1 className="font-semibold text-sm">Water Compact Review</h1>
-          <Badge variant="secondary" className="text-[10px] uppercase font-mono px-1.5 py-0">Read-only prototype</Badge>
+          <Badge variant="secondary" className="text-[10px] uppercase font-mono px-1.5 py-0">Prototype</Badge>
         </div>
+
         <div className="text-xs text-muted-foreground font-mono hidden md:block">
-          {stats ? `${stats.total_candidates} candidates · ${stats.total_anchors} anchors · ${stats.total_documents} documents` : 'Loading stats...'}
+          {stats
+            ? `${stats.total_candidates} candidates · ${stats.total_anchors} anchors · ${stats.total_documents} documents${reviewedCount > 0 ? ` · ${reviewedCount} reviewed` : ''}`
+            : 'Loading…'}
         </div>
-        <div className="flex gap-4 text-xs font-medium">
-          <a href="#" className="flex items-center gap-1 hover:text-primary transition-colors text-muted-foreground">
-            Cambodia <ExternalLink className="w-3 h-3" />
-          </a>
-          <a href="#" className="flex items-center gap-1 hover:text-primary transition-colors text-muted-foreground">
-            Sierra Leone <ExternalLink className="w-3 h-3" />
-          </a>
-          <a href="#" className="flex items-center gap-1 hover:text-primary transition-colors text-muted-foreground">
-            Jamaica <ExternalLink className="w-3 h-3" />
-          </a>
+
+        <div className="flex items-center gap-4 flex-none">
+          {/* Reviewer chip */}
+          {reviewer ? (
+            <div className="flex items-center gap-1.5 text-xs border border-border rounded-full px-2.5 py-1 bg-slate-50">
+              <User className="w-3.5 h-3.5 text-slate-500" />
+              <span className="font-medium text-slate-700 max-w-[120px] truncate">{reviewer.display_name}</span>
+              <button
+                onClick={() => { logout(); setShowReviewerModal(true); }}
+                className="text-slate-400 hover:text-slate-600 ml-0.5 text-[10px] underline underline-offset-1"
+              >
+                Switch
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowReviewerModal(true)}
+              className="text-xs text-primary hover:underline font-medium flex items-center gap-1"
+            >
+              <User className="w-3.5 h-3.5" />
+              Sign in to review
+            </button>
+          )}
+
+          <div className="flex gap-4 text-xs font-medium">
+            <a href="#" className="flex items-center gap-1 hover:text-primary transition-colors text-muted-foreground">
+              Cambodia <ExternalLink className="w-3 h-3" />
+            </a>
+            <a href="#" className="flex items-center gap-1 hover:text-primary transition-colors text-muted-foreground">
+              Sierra Leone <ExternalLink className="w-3 h-3" />
+            </a>
+            <a href="#" className="flex items-center gap-1 hover:text-primary transition-colors text-muted-foreground">
+              Jamaica <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
       </header>
 
       {/* Main Workspace */}
       <div className="flex-1 h-[calc(100vh-3rem)]">
         <PanelGroup direction="horizontal">
-          
+
           {/* Left Panel: List */}
           <Panel defaultSize={25} minSize={20} maxSize={35} className="flex flex-col bg-card relative">
             <div className="flex-none p-3 border-b border-border space-y-3 bg-muted/20">
-              
+
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Showing {candidates.length} of {stats?.total_candidates || '?'}
                 </span>
                 <div className="flex gap-1 items-center">
-                  <button onClick={handlePrev} disabled={selectedIndex <= 0} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronLeft className="w-4 h-4"/></button>
+                  <button onClick={handlePrev} disabled={selectedIndex <= 0} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
                   <span className="text-xs font-mono text-muted-foreground w-16 text-center">
                     {candidates.length > 0 ? selectedIndex + 1 : 0} / {candidates.length}
                   </span>
-                  <button onClick={handleNext} disabled={selectedIndex >= candidates.length - 1} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronRight className="w-4 h-4"/></button>
+                  <button onClick={handleNext} disabled={selectedIndex >= candidates.length - 1} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
                 </div>
               </div>
 
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input 
-                  placeholder="Search actions, IDs..." 
-                  className="pl-8 h-9 text-xs" 
+                <Input
+                  placeholder="Search actions, IDs..."
+                  className="pl-8 h-9 text-xs"
                   value={filters.search}
                   onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <Select value={filters.country} onValueChange={(v) => setFilters({...filters, country: v})}>
+                <Select value={filters.country} onValueChange={(v) => setFilters({ ...filters, country: v })}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Country" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Countries</SelectItem>
@@ -207,8 +348,8 @@ export default function Workspace() {
                     <SelectItem value="Jamaica">Jamaica</SelectItem>
                   </SelectContent>
                 </Select>
-                
-                <Select value={filters.stream} onValueChange={(v) => setFilters({...filters, stream: v})}>
+
+                <Select value={filters.stream} onValueChange={(v) => setFilters({ ...filters, stream: v })}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Stream" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Streams</SelectItem>
@@ -218,7 +359,7 @@ export default function Workspace() {
                   </SelectContent>
                 </Select>
 
-                <Select value={filters.inclusion_decision} onValueChange={(v) => setFilters({...filters, inclusion_decision: v})}>
+                <Select value={filters.inclusion_decision} onValueChange={(v) => setFilters({ ...filters, inclusion_decision: v })}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Inclusion" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Decisions</SelectItem>
@@ -229,7 +370,7 @@ export default function Workspace() {
                   </SelectContent>
                 </Select>
 
-                <Select value={filters.confidence_level} onValueChange={(v) => setFilters({...filters, confidence_level: v})}>
+                <Select value={filters.confidence_level} onValueChange={(v) => setFilters({ ...filters, confidence_level: v })}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Confidence" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="All">All Conf.</SelectItem>
@@ -242,7 +383,7 @@ export default function Workspace() {
 
               {showAdvancedFilters && (
                 <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-border">
-                  <Select value={filters.anchor_confidence} onValueChange={(v) => setFilters({...filters, anchor_confidence: v})}>
+                  <Select value={filters.anchor_confidence} onValueChange={(v) => setFilters({ ...filters, anchor_confidence: v })}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Anchor Conf" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">All Anchor Conf</SelectItem>
@@ -252,7 +393,7 @@ export default function Workspace() {
                     </SelectContent>
                   </Select>
 
-                  <Select value={filters.human_review_status} onValueChange={(v) => setFilters({...filters, human_review_status: v})}>
+                  <Select value={filters.human_review_status} onValueChange={(v) => setFilters({ ...filters, human_review_status: v })}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Review Status" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">All Review Status</SelectItem>
@@ -262,7 +403,7 @@ export default function Workspace() {
                     </SelectContent>
                   </Select>
 
-                  <Select value={filters.reform_aspiration_status} onValueChange={(v) => setFilters({...filters, reform_aspiration_status: v})}>
+                  <Select value={filters.reform_aspiration_status} onValueChange={(v) => setFilters({ ...filters, reform_aspiration_status: v })}>
                     <SelectTrigger className="h-8 text-xs col-span-2"><SelectValue placeholder="Aspiration Status" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">All Aspiration Statuses</SelectItem>
@@ -271,8 +412,8 @@ export default function Workspace() {
                       <SelectItem value="Has explicit mechanism">Has explicit mechanism</SelectItem>
                     </SelectContent>
                   </Select>
-                  
-                  <Select value={filters.reform_type_tier_1} onValueChange={(v) => setFilters({...filters, reform_type_tier_1: v})}>
+
+                  <Select value={filters.reform_type_tier_1} onValueChange={(v) => setFilters({ ...filters, reform_type_tier_1: v })}>
                     <SelectTrigger className="h-8 text-xs col-span-2"><SelectValue placeholder="Tier 1 Reform Type" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">All Tier 1 Types</SelectItem>
@@ -285,7 +426,7 @@ export default function Workspace() {
                 </div>
               )}
 
-              <button 
+              <button
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                 className="w-full text-center text-[10px] uppercase font-bold text-muted-foreground flex items-center justify-center gap-1 hover:text-primary transition-colors"
               >
@@ -297,14 +438,16 @@ export default function Workspace() {
             <ScrollArea className="flex-1">
               <div className="flex flex-col">
                 {candidatesLoading ? (
-                  <div className="p-4 text-sm text-muted-foreground text-center">Loading candidates...</div>
+                  <div className="p-4 text-sm text-muted-foreground text-center">Loading candidates…</div>
                 ) : candidates.length === 0 ? (
                   <div className="p-4 text-sm text-muted-foreground text-center">No matching candidates</div>
                 ) : (
                   candidates.map((c) => {
                     const isSelected = c.candidate_id === selectedCandidateId;
+                    const hasConflict = (c as any).has_conflict === true;
+                    const reviewCount = (c as any).review_count ?? 0;
                     return (
-                      <div 
+                      <div
                         key={c.candidate_id}
                         onClick={() => {
                           const url = new URL(window.location.href);
@@ -319,10 +462,16 @@ export default function Workspace() {
                         <div className="flex justify-between items-start mb-1.5">
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono text-xs font-semibold text-slate-700">{c.candidate_id}</span>
-                            <Badge variant="outline" className="text-[10px] px-1 h-4">{c.country.substring(0,3).toUpperCase()}</Badge>
+                            <Badge variant="outline" className="text-[10px] px-1 h-4">{c.country.substring(0, 3).toUpperCase()}</Badge>
+                            {hasConflict && (
+                              <AlertTriangle className="w-3 h-3 text-amber-500" aria-label="Reviewers disagree" />
+                            )}
+                            {!hasConflict && reviewCount > 0 && (
+                              <CheckCircle2 className="w-3 h-3 text-emerald-500" aria-label={`${reviewCount} review(s)`} />
+                            )}
                           </div>
                           <Badge variant="outline" className={cn("text-[10px] px-1 h-4 font-mono", getStreamColor(c.candidate_stream))}>
-                            Str {c.candidate_stream}
+                            Str {c.candidate_stream.charAt(0)}
                           </Badge>
                         </div>
                         <p className="text-xs text-foreground line-clamp-2 leading-relaxed mb-2 font-medium">
@@ -360,8 +509,8 @@ export default function Workspace() {
                         onClick={() => setActiveAnchorId(anchor.anchor_id)}
                         className={cn(
                           "px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all border",
-                          isActive 
-                            ? "bg-slate-800 text-white border-slate-800 shadow-sm" 
+                          isActive
+                            ? "bg-slate-800 text-white border-slate-800 shadow-sm"
                             : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                         )}
                       >
@@ -371,7 +520,7 @@ export default function Workspace() {
                     );
                   })}
                 </div>
-                
+
                 <div className="flex-1 relative overflow-hidden flex flex-col">
                   {document && activeAnchor ? (
                     <PdfViewer
@@ -383,7 +532,7 @@ export default function Workspace() {
                     />
                   ) : (
                     <div className="flex-1 flex items-center justify-center text-sm text-slate-500">
-                      Loading document...
+                      Loading document…
                     </div>
                   )}
 
@@ -418,7 +567,7 @@ export default function Workspace() {
           {/* Right Panel: Data Details */}
           <Panel defaultSize={30} minSize={25} className="flex flex-col bg-card">
             {detailLoading ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">Loading details...</div>
+              <div className="p-6 text-center text-sm text-muted-foreground">Loading details…</div>
             ) : candidateDetail ? (
               <>
                 <div className="flex-none p-5 border-b border-border bg-slate-50/50">
@@ -428,17 +577,22 @@ export default function Workspace() {
                     </span>
                     <Badge variant="outline" className="bg-white">{candidateDetail.country}</Badge>
                     <Badge variant="outline" className={cn("bg-white font-mono", getStreamColor(candidateDetail.candidate_stream))}>
-                      Stream {candidateDetail.candidate_stream}
+                      Stream {candidateDetail.candidate_stream.charAt(0)}
                     </Badge>
+                    {reviewsConflict && (
+                      <Badge variant="outline" className="bg-amber-50 border-amber-300 text-amber-700 text-[10px]">
+                        <AlertTriangle className="w-3 h-3 mr-1" /> Conflict
+                      </Badge>
+                    )}
                   </div>
                   <h2 className="text-[15px] font-semibold text-slate-900 leading-snug">
                     {candidateDetail.standardized_candidate_reform_action}
                   </h2>
                 </div>
-                
+
                 <ScrollArea className="flex-1 p-5">
                   <div className="space-y-6 pb-10">
-                    
+
                     {candidateDetail.final_validated_action && (
                       <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
                         <div className="flex items-center gap-2 text-emerald-800 font-semibold mb-1 text-sm uppercase tracking-wide">
@@ -450,21 +604,22 @@ export default function Workspace() {
                       </div>
                     )}
 
+                    {/* ── Methodology Decisions ── */}
                     <section className="space-y-4">
                       <div className="flex items-center justify-between border-b border-border pb-1">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Methodology Decisions</h3>
                         <span className="text-[9px] text-slate-400 font-mono">LLM-GENERATED</span>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                         <div>
                           <label className="text-[10px] font-semibold uppercase text-slate-500 mb-1 block">Inclusion Decision</label>
-                          <Badge 
-                            variant="secondary" 
+                          <Badge
+                            variant="secondary"
                             className={cn(
                               "text-xs px-2 py-0.5 rounded-sm w-full justify-center",
-                              candidateDetail.inclusion_decision === 'Include' && "bg-emerald-100 text-emerald-800",
-                              candidateDetail.inclusion_decision === 'Exclude' && "bg-red-100 text-red-800",
+                              candidateDetail.inclusion_decision === 'Provisionally Included' && "bg-emerald-100 text-emerald-800",
+                              candidateDetail.inclusion_decision === 'Excluded by LLM' && "bg-red-100 text-red-800",
                             )}
                           >
                             {candidateDetail.inclusion_decision}
@@ -476,7 +631,7 @@ export default function Workspace() {
                             {candidateDetail.reform_action_tag}
                           </Badge>
                         </div>
-                        
+
                         <div className="col-span-2">
                           <label className="text-[10px] font-semibold uppercase text-slate-500 mb-1 block">Classification Confidence</label>
                           <div className="flex items-center gap-2">
@@ -495,11 +650,12 @@ export default function Workspace() {
                       </div>
                     </section>
 
+                    {/* ── Domain & Classification ── */}
                     <section className="space-y-4">
                       <div className="flex items-center justify-between border-b border-border pb-1">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Domain & Classification</h3>
                       </div>
-                      
+
                       <div className="space-y-3">
                         <div>
                           <label className="text-[10px] font-semibold uppercase text-slate-500 block">Water Security Pillar</label>
@@ -526,15 +682,16 @@ export default function Workspace() {
                       </div>
                     </section>
 
+                    {/* ── Aspiration & Assessment ── */}
                     <section className="space-y-4">
                       <div className="flex items-center justify-between border-b border-border pb-1">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Aspiration & Assessment</h3>
                       </div>
-                      
+
                       <div className="space-y-3">
                         <div>
                           <label className="text-[10px] font-semibold uppercase text-slate-500 mb-1 block">Aspiration Status</label>
-                          <Badge 
+                          <Badge
                             variant="secondary"
                             className={cn(
                               "text-xs font-medium",
@@ -545,36 +702,36 @@ export default function Workspace() {
                           </Badge>
                         </div>
 
-                        {candidateDetail.reform_aspiration_status.toLowerCase().includes('aspiration') && 
-                         candidateDetail.anchors?.some(a => ['Aspiration', 'Explicit Mechanism'].includes(a.anchor_role)) && (
-                          <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-md">
-                            <label className="text-[10px] font-semibold uppercase text-slate-500 mb-2 block">Aspiration vs Mechanism Comparison</label>
-                            <div className="space-y-3">
-                              {candidateDetail.anchors.filter(a => a.anchor_role === 'Aspiration').map(a => (
-                                <div key={a.anchor_id} className="text-sm">
-                                  <span className="text-[10px] uppercase font-bold text-purple-600 block">Aspiration</span>
-                                  <blockquote className="italic border-l-2 border-purple-300 pl-2 mt-1 text-slate-600">{a.verbatim_source_text}</blockquote>
-                                </div>
-                              ))}
-                              
-                              {candidateDetail.anchors.some(a => a.anchor_role === 'Aspiration') && 
-                               candidateDetail.anchors.some(a => a.anchor_role === 'Explicit Mechanism') && (
-                                <div className="flex justify-center -my-1 relative z-10">
-                                  <Badge variant="outline" className="bg-white text-[9px] uppercase shadow-sm">
-                                    Substantiated By
-                                  </Badge>
-                                </div>
-                              )}
+                        {candidateDetail.reform_aspiration_status.toLowerCase().includes('aspiration') &&
+                          candidateDetail.anchors?.some(a => ['Aspiration', 'Explicit Mechanism'].includes(a.anchor_role)) && (
+                            <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-md">
+                              <label className="text-[10px] font-semibold uppercase text-slate-500 mb-2 block">Aspiration vs Mechanism Comparison</label>
+                              <div className="space-y-3">
+                                {candidateDetail.anchors.filter(a => a.anchor_role === 'Aspiration').map(a => (
+                                  <div key={a.anchor_id} className="text-sm">
+                                    <span className="text-[10px] uppercase font-bold text-purple-600 block">Aspiration</span>
+                                    <blockquote className="italic border-l-2 border-purple-300 pl-2 mt-1 text-slate-600">{a.verbatim_source_text}</blockquote>
+                                  </div>
+                                ))}
 
-                              {candidateDetail.anchors.filter(a => a.anchor_role === 'Explicit Mechanism').map(a => (
-                                <div key={a.anchor_id} className="text-sm">
-                                  <span className="text-[10px] uppercase font-bold text-emerald-600 block">Mechanism</span>
-                                  <blockquote className="italic border-l-2 border-emerald-300 pl-2 mt-1 text-slate-600">{a.verbatim_source_text}</blockquote>
-                                </div>
-                              ))}
+                                {candidateDetail.anchors.some(a => a.anchor_role === 'Aspiration') &&
+                                  candidateDetail.anchors.some(a => a.anchor_role === 'Explicit Mechanism') && (
+                                    <div className="flex justify-center -my-1 relative z-10">
+                                      <Badge variant="outline" className="bg-white text-[9px] uppercase shadow-sm">
+                                        Substantiated By
+                                      </Badge>
+                                    </div>
+                                  )}
+
+                                {candidateDetail.anchors.filter(a => a.anchor_role === 'Explicit Mechanism').map(a => (
+                                  <div key={a.anchor_id} className="text-sm">
+                                    <span className="text-[10px] uppercase font-bold text-emerald-600 block">Mechanism</span>
+                                    <blockquote className="italic border-l-2 border-emerald-300 pl-2 mt-1 text-slate-600">{a.verbatim_source_text}</blockquote>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
                         <div>
                           <label className="text-[10px] font-semibold uppercase text-slate-500 mb-1.5 mt-3 block">Criterion Assessment</label>
@@ -587,6 +744,7 @@ export default function Workspace() {
                       </div>
                     </section>
 
+                    {/* ── Relationships ── */}
                     {relationships && relationships.length > 0 && (
                       <section className="space-y-4">
                         <div className="flex items-center justify-between border-b border-border pb-1">
@@ -607,7 +765,138 @@ export default function Workspace() {
                         </div>
                       </section>
                     )}
-                    
+
+                    {/* ── Your Decision ── */}
+                    <section className="space-y-3">
+                      <div className="flex items-center justify-between border-b border-border pb-1">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Your Decision</h3>
+                        {reviewer && (
+                          <span className="text-[9px] text-slate-400 font-mono">as {reviewer.display_name}</span>
+                        )}
+                      </div>
+
+                      {!reviewer ? (
+                        <div className="text-center py-4">
+                          <p className="text-xs text-slate-500 mb-2">Sign in to submit a review decision.</p>
+                          <button
+                            onClick={() => setShowReviewerModal(true)}
+                            className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 mx-auto"
+                          >
+                            <User className="w-3.5 h-3.5" /> Sign in
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {/* Decision radio */}
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {(['Accept', 'Reject', 'Needs Discussion'] as const).map(opt => (
+                              <button
+                                key={opt}
+                                onClick={() => { setMyDecision(opt); setSubmitSuccess(false); }}
+                                className={cn(
+                                  "py-2 rounded-md border text-[11px] font-semibold transition-all",
+                                  myDecision === opt
+                                    ? opt === 'Accept'
+                                      ? 'bg-emerald-600 text-white border-emerald-600'
+                                      : opt === 'Reject'
+                                        ? 'bg-red-600 text-white border-red-600'
+                                        : 'bg-amber-500 text-white border-amber-500'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                )}
+                              >
+                                {opt}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Rationale textarea */}
+                          <textarea
+                            placeholder="Rationale or notes (optional)…"
+                            value={myRationale}
+                            onChange={e => { setMyRationale(e.target.value); setSubmitSuccess(false); }}
+                            rows={3}
+                            className="w-full text-xs border border-slate-200 rounded-md p-2.5 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent text-slate-700 placeholder:text-slate-400"
+                          />
+
+                          {/* Submit button */}
+                          <button
+                            onClick={submitReview}
+                            disabled={!myDecision || submitting}
+                            className={cn(
+                              "w-full py-2 text-xs font-semibold rounded-md transition-colors disabled:opacity-40",
+                              submitSuccess
+                                ? "bg-emerald-600 text-white"
+                                : "bg-slate-900 hover:bg-slate-700 text-white"
+                            )}
+                          >
+                            {submitting ? 'Saving…' : submitSuccess ? '✓ Saved' : candidateReviews.some(r => r.reviewer_id === reviewer.reviewer_id) ? 'Update Decision' : 'Submit Decision'}
+                          </button>
+                        </div>
+                      )}
+                    </section>
+
+                    {/* ── All Reviewer Decisions ── */}
+                    <section className="space-y-3">
+                      <div className="flex items-center justify-between border-b border-border pb-1">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5" /> All Reviewer Decisions
+                        </h3>
+                        <span className="text-[9px] font-mono text-slate-400">
+                          {candidateReviews.length} {candidateReviews.length === 1 ? 'decision' : 'decisions'}
+                        </span>
+                      </div>
+
+                      {reviewsConflict && (
+                        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-md p-3">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 flex-none mt-0.5" />
+                          <div>
+                            <p className="text-xs font-semibold text-amber-800">Reviewers disagree on this candidate</p>
+                            <p className="text-[10px] text-amber-700 mt-0.5">Conflicting decisions are shown below. This candidate may need discussion before finalizing.</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {candidateReviews.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">No decisions submitted yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {/* Group: show only latest per reviewer */}
+                          {(() => {
+                            const seen = new Set<string>();
+                            return candidateReviews.filter(r => {
+                              if (seen.has(r.reviewer_id)) return false;
+                              seen.add(r.reviewer_id);
+                              return true;
+                            }).map(review => (
+                              <div key={review.review_id} className="p-3 bg-slate-50 border border-border rounded-md space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center">
+                                      <span className="text-white text-[9px] font-bold">
+                                        {review.reviewer_name.charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                    <span className="text-xs font-semibold text-slate-800">{review.reviewer_name}</span>
+                                  </div>
+                                  <Badge variant="outline" className={cn("text-[9px] font-semibold", getDecisionBadgeClass(review.inclusion_decision))}>
+                                    {review.inclusion_decision}
+                                  </Badge>
+                                </div>
+                                {review.comment && (
+                                  <p className="text-xs text-slate-600 italic leading-relaxed pl-6.5">
+                                    "{review.comment}"
+                                  </p>
+                                )}
+                                <p className="text-[10px] text-muted-foreground pl-6.5">
+                                  {formatRelativeTime(review.created_at)}
+                                </p>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      )}
+                    </section>
+
                   </div>
                 </ScrollArea>
               </>
@@ -617,7 +906,7 @@ export default function Workspace() {
               </div>
             )}
           </Panel>
-          
+
         </PanelGroup>
       </div>
     </div>

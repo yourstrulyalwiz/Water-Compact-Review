@@ -102,7 +102,6 @@ export function PdfViewer({ documentId, documentSha256, matchedPage, rectangles,
 
         renderTask = page.render({
           canvasContext: context,
-          canvas: canvas,
           transform: transform,
           viewport: viewport,
         });

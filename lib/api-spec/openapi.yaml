@@ -20,6 +20,10 @@ tags:
     description: Candidate relationships
   - name: stats
     description: Summary statistics
+  - name: reviewers
+    description: Reviewer identity management
+  - name: reviews
+    description: Candidate review decisions
 
 paths:
   /healthz:
@@ -207,7 +211,109 @@ paths:
               schema:
                 $ref: "#/components/schemas/StatsResponse"
 
+  /reviewers/register:
+    post:
+      operationId: registerReviewer
+      tags: [reviewers]
+      summary: Register a new reviewer with name and PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewerCredentials"
+      responses:
+        "201":
+          description: Reviewer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewerResponse"
+        "400":
+          description: Validation error
+        "409":
+          description: Name already taken
+
+  /reviewers/login:
+    post:
+      operationId: loginReviewer
+      tags: [reviewers]
+      summary: Authenticate a reviewer by name and PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewerCredentials"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewerResponse"
+        "401":
+          description: Wrong PIN
+        "404":
+          description: Reviewer not found
+
+  /candidates/{candidateId}/reviews:
+    get:
+      operationId: listCandidateReviews
+      tags: [reviews]
+      summary: List all human reviews for a candidate
+      parameters:
+        - name: candidateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reviews list with conflict flag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CandidateReviewsResponse"
+    post:
+      operationId: submitCandidateReview
+      tags: [reviews]
+      summary: Submit a review decision for a candidate
+      description: Reviewer identity is derived from the Bearer token issued at login/register. No reviewer_id in body.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: candidateId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitReviewRequest"
+      responses:
+        "201":
+          description: Review submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CandidateReview"
+        "400":
+          description: Missing required fields
+        "401":
+          description: Missing or invalid Bearer token
+        "404":
+          description: Candidate not found
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: ReviewerToken
   schemas:
     HealthStatus:
       type: object
@@ -338,6 +444,10 @@ components:
           type: string
         criterion_assessment:
           type: string
+        review_count:
+          type: number
+        has_conflict:
+          type: boolean
 
     AnchorSummary:
       type: object
@@ -524,6 +634,72 @@ components:
         human_review_status:
           type: string
         reviewer_comment:
+          type: ["string", "null"]
+
+    ReviewerCredentials:
+      type: object
+      required: [display_name, pin]
+      properties:
+        display_name:
+          type: string
+        pin:
+          type: string
+
+    ReviewerResponse:
+      type: object
+      required: [reviewer_id, display_name, token]
+      properties:
+        reviewer_id:
+          type: string
+        display_name:
+          type: string
+        token:
+          type: string
+          description: Signed session token. Pass as Authorization Bearer on review submissions.
+
+    CandidateReview:
+      type: object
+      required:
+        - review_id
+        - candidate_id
+        - reviewer_id
+        - reviewer_name
+        - inclusion_decision
+        - created_at
+      properties:
+        review_id:
+          type: number
+        candidate_id:
+          type: string
+        reviewer_id:
+          type: string
+        reviewer_name:
+          type: string
+        inclusion_decision:
+          type: string
+        comment:
+          type: ["string", "null"]
+        created_at:
+          type: string
+
+    CandidateReviewsResponse:
+      type: object
+      required: [reviews, has_conflict]
+      properties:
+        reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/CandidateReview"
+        has_conflict:
+          type: boolean
+
+    SubmitReviewRequest:
+      type: object
+      required: [inclusion_decision]
+      properties:
+        inclusion_decision:
+          type: string
+        comment:
           type: ["string", "null"]
 
     CountByKey:

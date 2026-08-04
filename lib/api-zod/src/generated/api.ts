@@ -112,7 +112,9 @@ export const ListCandidatesResponse = zod.object({
   "reviewer_comment": zod.string().nullish(),
   "final_validated_action": zod.string().nullish(),
   "reform_aspiration_status": zod.string(),
-  "criterion_assessment": zod.string()
+  "criterion_assessment": zod.string(),
+  "review_count": zod.number().optional(),
+  "has_conflict": zod.boolean().optional()
 })),
   "total": zod.number(),
   "page": zod.number(),
@@ -151,7 +153,9 @@ export const GetCandidateResponse = zod.object({
   "reviewer_comment": zod.string().nullish(),
   "final_validated_action": zod.string().nullish(),
   "reform_aspiration_status": zod.string(),
-  "criterion_assessment": zod.string()
+  "criterion_assessment": zod.string(),
+  "review_count": zod.number().optional(),
+  "has_conflict": zod.boolean().optional()
 }).and(zod.object({
   "anchors": zod.array(zod.object({
   "anchor_id": zod.string(),
@@ -310,6 +314,81 @@ export const GetStatsResponse = zod.object({
   "key": zod.string(),
   "count": zod.number()
 }))
+})
+
+
+/**
+ * @summary Register a new reviewer with name and PIN
+ */
+export const RegisterReviewerBody = zod.object({
+  "display_name": zod.string(),
+  "pin": zod.string()
+})
+
+export const RegisterReviewerResponse = zod.object({
+  "reviewer_id": zod.string(),
+  "display_name": zod.string(),
+  "token": zod.string().describe('Signed session token. Pass as Authorization Bearer on review submissions.')
+})
+
+
+/**
+ * @summary Authenticate a reviewer by name and PIN
+ */
+export const LoginReviewerBody = zod.object({
+  "display_name": zod.string(),
+  "pin": zod.string()
+})
+
+export const LoginReviewerResponse = zod.object({
+  "reviewer_id": zod.string(),
+  "display_name": zod.string(),
+  "token": zod.string().describe('Signed session token. Pass as Authorization Bearer on review submissions.')
+})
+
+
+/**
+ * @summary List all human reviews for a candidate
+ */
+export const ListCandidateReviewsParams = zod.object({
+  "candidateId": zod.coerce.string()
+})
+
+export const ListCandidateReviewsResponse = zod.object({
+  "reviews": zod.array(zod.object({
+  "review_id": zod.number(),
+  "candidate_id": zod.string(),
+  "reviewer_id": zod.string(),
+  "reviewer_name": zod.string(),
+  "inclusion_decision": zod.string(),
+  "comment": zod.string().nullish(),
+  "created_at": zod.string()
+})),
+  "has_conflict": zod.boolean()
+})
+
+
+/**
+ * Reviewer identity is derived from the Bearer token issued at login/register. No reviewer_id in body.
+ * @summary Submit a review decision for a candidate
+ */
+export const SubmitCandidateReviewParams = zod.object({
+  "candidateId": zod.coerce.string()
+})
+
+export const SubmitCandidateReviewBody = zod.object({
+  "inclusion_decision": zod.string(),
+  "comment": zod.string().nullish()
+})
+
+export const SubmitCandidateReviewResponse = zod.object({
+  "review_id": zod.number(),
+  "candidate_id": zod.string(),
+  "reviewer_id": zod.string(),
+  "reviewer_name": zod.string(),
+  "inclusion_decision": zod.string(),
+  "comment": zod.string().nullish(),
+  "created_at": zod.string()
 })
 
 

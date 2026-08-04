@@ -6,6 +6,36 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// Trust the Replit proxy so that express-rate-limit can correctly identify
+// clients from X-Forwarded-For rather than the internal proxy IP.
+app.set("trust proxy", 1);
+
+// Restrict CORS to the app's own origin.
+// In the Replit environment, frontend and API share the same proxied host, so
+// same-origin browser requests never trigger CORS at all. This origin list
+// blocks external sites from making cross-origin authenticated requests.
+const allowedOrigins = new Set<string>();
+const devDomain = process.env.REPLIT_DEV_DOMAIN;
+if (devDomain) {
+  allowedOrigins.add(`https://${devDomain}`);
+}
+const extraOrigin = process.env.ALLOWED_ORIGIN;
+if (extraOrigin) {
+  allowedOrigins.add(extraOrigin);
+}
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Allow same-origin (non-browser) requests that have no Origin header
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.has(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin ${origin} is not allowed`));
+    },
+    credentials: true,
+  }),
+);
+
 app.use(
   pinoHttp({
     logger,
@@ -25,7 +55,6 @@ app.use(
     },
   }),
 );
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

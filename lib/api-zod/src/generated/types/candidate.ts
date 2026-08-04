@@ -34,4 +34,6 @@ export interface Candidate {
   final_validated_action?: string | null;
   reform_aspiration_status: string;
   criterion_assessment: string;
+  review_count?: number;
+  has_conflict?: boolean;
 }

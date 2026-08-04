@@ -5,6 +5,7 @@ import candidatesRouter from "./candidates";
 import anchorsRouter from "./anchors";
 import relationshipsRouter from "./relationships";
 import statsRouter from "./stats";
+import reviewersRouter from "./reviewers";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(candidatesRouter);
 router.use(anchorsRouter);
 router.use(relationshipsRouter);
 router.use(statsRouter);
+router.use(reviewersRouter);
 
 export default router;
