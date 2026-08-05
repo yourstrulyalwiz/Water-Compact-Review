@@ -15,6 +15,10 @@ function csvRow(values: (string | null | undefined)[]): string {
   return values.map(csvCell).join(",");
 }
 
+// Fixed reviewer order — must match the seeded names in migration 002.
+const REVIEWERS = ["Christina", "Billy", "Juliana", "Patricia"] as const;
+
+// Wide-format header: one row per candidate, reviewer decisions pivoted into columns.
 const HEADER = [
   "candidate_id",
   "country",
@@ -22,18 +26,31 @@ const HEADER = [
   "standardized_reform_action",
   "llm_inclusion_decision",
   "llm_rationale",
-  "reviewer_name",
-  "reviewer_decision",
-  "rationale",
-  "reviewed_at",
+  // Per-reviewer columns (3 × 4 = 12)
+  "christina_decision",
+  "christina_comment",
+  "christina_reviewed_at",
+  "billy_decision",
+  "billy_comment",
+  "billy_reviewed_at",
+  "juliana_decision",
+  "juliana_comment",
+  "juliana_reviewed_at",
+  "patricia_decision",
+  "patricia_comment",
+  "patricia_reviewed_at",
+  // Cross-reviewer aggregates
+  "review_count",
+  "has_conflict",
+  "consensus_decision",
 ];
 
 /**
  * GET /api/export/decisions.csv
  *
- * Returns a UTF-8 CSV (with BOM for Excel) with one row per
- * reviewer–candidate pair. Candidates with no reviews appear with
- * blank reviewer columns so analysts can see coverage gaps.
+ * Returns a UTF-8 CSV (with BOM for Excel) in wide format:
+ * one row per candidate, with each of the four reviewers' latest decision,
+ * comment, and timestamp in dedicated columns, plus aggregate columns.
  *
  * Accepts the same filter query params as GET /api/candidates.
  */
@@ -100,40 +117,91 @@ router.get("/export/decisions.csv", async (req, res): Promise<void> => {
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
 
-  // One row per reviewer–candidate pair (latest decision per reviewer only).
-  // Candidates with no reviews appear once with NULL reviewer columns.
+  // LATERAL subquery per reviewer: picks the single most-recent review for that
+  // reviewer on each candidate.  LEFT JOIN … ON TRUE preserves candidates with
+  // no review from that reviewer (all columns NULL).
   const result = await pool.query(
     `SELECT
        c.candidate_id,
        c.country,
-       c.candidate_stream AS stream,
-       c.standardized_candidate_reform_action AS standardized_reform_action,
-       c.inclusion_decision AS llm_inclusion_decision,
-       c.decision_rationale AS llm_rationale,
-       r.display_name AS reviewer_name,
-       cr.inclusion_decision AS reviewer_decision,
-       cr.comment AS rationale,
-       cr.created_at AS reviewed_at
+       c.candidate_stream                        AS stream,
+       c.standardized_candidate_reform_action    AS standardized_reform_action,
+       c.inclusion_decision                      AS llm_inclusion_decision,
+       c.decision_rationale                      AS llm_rationale,
+       -- Christina
+       cr_c.inclusion_decision  AS christina_decision,
+       cr_c.comment             AS christina_comment,
+       cr_c.created_at          AS christina_reviewed_at,
+       -- Billy
+       cr_b.inclusion_decision  AS billy_decision,
+       cr_b.comment             AS billy_comment,
+       cr_b.created_at          AS billy_reviewed_at,
+       -- Juliana
+       cr_j.inclusion_decision  AS juliana_decision,
+       cr_j.comment             AS juliana_comment,
+       cr_j.created_at          AS juliana_reviewed_at,
+       -- Patricia
+       cr_p.inclusion_decision  AS patricia_decision,
+       cr_p.comment             AS patricia_comment,
+       cr_p.created_at          AS patricia_reviewed_at
      FROM candidates c
-     LEFT JOIN (
-       SELECT DISTINCT ON (candidate_id, reviewer_id)
-         candidate_id, reviewer_id, inclusion_decision, comment, created_at
-       FROM candidate_reviews
-       ORDER BY candidate_id, reviewer_id, created_at DESC
-     ) cr ON cr.candidate_id = c.candidate_id
-     LEFT JOIN reviewers r ON r.reviewer_id::text = cr.reviewer_id
+     LEFT JOIN LATERAL (
+       SELECT cr.inclusion_decision, cr.comment, cr.created_at
+       FROM candidate_reviews cr
+       JOIN reviewers r ON r.reviewer_id::text = cr.reviewer_id
+       WHERE r.display_name = 'Christina' AND cr.candidate_id = c.candidate_id
+       ORDER BY cr.created_at DESC LIMIT 1
+     ) cr_c ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT cr.inclusion_decision, cr.comment, cr.created_at
+       FROM candidate_reviews cr
+       JOIN reviewers r ON r.reviewer_id::text = cr.reviewer_id
+       WHERE r.display_name = 'Billy' AND cr.candidate_id = c.candidate_id
+       ORDER BY cr.created_at DESC LIMIT 1
+     ) cr_b ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT cr.inclusion_decision, cr.comment, cr.created_at
+       FROM candidate_reviews cr
+       JOIN reviewers r ON r.reviewer_id::text = cr.reviewer_id
+       WHERE r.display_name = 'Juliana' AND cr.candidate_id = c.candidate_id
+       ORDER BY cr.created_at DESC LIMIT 1
+     ) cr_j ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT cr.inclusion_decision, cr.comment, cr.created_at
+       FROM candidate_reviews cr
+       JOIN reviewers r ON r.reviewer_id::text = cr.reviewer_id
+       WHERE r.display_name = 'Patricia' AND cr.candidate_id = c.candidate_id
+       ORDER BY cr.created_at DESC LIMIT 1
+     ) cr_p ON TRUE
      ${whereClause}
-     ORDER BY c.candidate_id, r.display_name NULLS LAST`,
+     ORDER BY c.candidate_id`,
     params,
   );
 
-  // Build CSV in memory (rows are at most ~189 × reviewers, well within limits)
+  // Build CSV in memory (at most ~189 rows, one per candidate — well within limits)
   const lines: string[] = [
-    // UTF-8 BOM so Excel opens correctly without import wizard
+    // UTF-8 BOM so Excel opens without import wizard
     "\uFEFF" + HEADER.join(","),
   ];
 
   for (const row of result.rows) {
+    // Compute cross-reviewer aggregates in the application layer
+    const decisions = [
+      row.christina_decision,
+      row.billy_decision,
+      row.juliana_decision,
+      row.patricia_decision,
+    ].filter(Boolean) as string[];
+
+    const review_count = decisions.length;
+    const unique = new Set(decisions);
+    const has_conflict = review_count >= 2 && unique.size > 1;
+    const consensus_decision =
+      review_count > 0 && !has_conflict ? decisions[0] : null;
+
+    const fmt = (ts: unknown) =>
+      ts ? new Date(ts as string).toISOString() : null;
+
     lines.push(
       csvRow([
         row.candidate_id,
@@ -142,10 +210,21 @@ router.get("/export/decisions.csv", async (req, res): Promise<void> => {
         row.standardized_reform_action,
         row.llm_inclusion_decision,
         row.llm_rationale,
-        row.reviewer_name,
-        row.reviewer_decision,
-        row.rationale,
-        row.reviewed_at ? new Date(row.reviewed_at).toISOString() : null,
+        row.christina_decision,
+        row.christina_comment,
+        fmt(row.christina_reviewed_at),
+        row.billy_decision,
+        row.billy_comment,
+        fmt(row.billy_reviewed_at),
+        row.juliana_decision,
+        row.juliana_comment,
+        fmt(row.juliana_reviewed_at),
+        row.patricia_decision,
+        row.patricia_comment,
+        fmt(row.patricia_reviewed_at),
+        String(review_count),
+        has_conflict ? "TRUE" : "FALSE",
+        consensus_decision,
       ]),
     );
   }

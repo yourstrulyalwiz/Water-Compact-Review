@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { ReviewerIdentity } from '@/hooks/use-reviewer';
-import { User, Lock } from 'lucide-react';
+import { User, Lock, ChevronDown } from 'lucide-react';
+
+const REVIEWER_NAMES = ['Christina', 'Billy', 'Juliana', 'Patricia'] as const;
+type ReviewerName = typeof REVIEWER_NAMES[number];
 
 interface ReviewerModalProps {
   onLogin: (identity: ReviewerIdentity) => void;
 }
 
 export function ReviewerModal({ onLogin }: ReviewerModalProps) {
-  const [displayName, setDisplayName] = useState('');
-  const [pin, setPin] = useState('');
+  const [selectedName, setSelectedName] = useState<ReviewerName | ''>('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,55 +19,43 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
     e.preventDefault();
     setError(null);
 
-    if (!displayName.trim()) {
-      setError('Please enter your name.');
+    if (!selectedName) {
+      setError('Please select your name.');
       return;
     }
-    if (!/^\d{4}$/.test(pin)) {
-      setError('PIN must be exactly 4 digits.');
+    if (!password) {
+      setError('Please enter the shared password.');
       return;
     }
 
     setLoading(true);
     try {
-      // Try registration first. If the name is new, this creates the account.
-      // If the name already exists (409), fall through to login.
-      const regRes = await fetch('/api/reviewers/register', {
+      const res = await fetch('/api/reviewers/authenticate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ display_name: displayName.trim(), pin }),
+        body: JSON.stringify({ display_name: selectedName, password }),
       });
 
-      if (regRes.ok) {
-        const identity = await regRes.json() as ReviewerIdentity;
+      if (res.ok) {
+        const identity = await res.json() as ReviewerIdentity;
         onLogin(identity);
         return;
       }
 
-      if (regRes.status !== 409) {
-        // 400 validation, 429 rate limit, or server error
-        const regErr = await regRes.json() as { error: string };
-        setError(regErr.error || 'Registration failed.');
+      if (res.status === 401) {
+        setError('Incorrect password. Please try again.');
         return;
       }
 
-      // 409 = name already exists — try login with the supplied PIN
-      const loginRes = await fetch('/api/reviewers/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ display_name: displayName.trim(), pin }),
-      });
-
-      if (loginRes.ok) {
-        const identity = await loginRes.json() as ReviewerIdentity;
-        onLogin(identity);
+      if (res.status === 429) {
+        setError('Too many attempts. Please wait a few minutes and try again.');
         return;
       }
 
-      const loginErr = await loginRes.json() as { error: string };
-      setError(loginErr.error || 'Invalid PIN. Please try again.');
+      const body = await res.json().catch(() => ({})) as { error?: string };
+      setError(body.error || 'Authentication failed. Please try again.');
     } catch {
-      setError('Network error. Please try again.');
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -77,47 +68,50 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
         <div className="bg-slate-900 px-6 py-5">
           <div className="flex items-center gap-3 mb-1">
             <User className="w-5 h-5 text-slate-400" />
-            <h2 className="text-white font-semibold text-base">Reviewer Identity</h2>
+            <h2 className="text-white font-semibold text-base">Reviewer Sign-in</h2>
           </div>
           <p className="text-slate-400 text-xs leading-relaxed">
-            Enter your name and a 4-digit PIN. New reviewers are registered automatically on first use.
+            Select your name and enter the shared review password to continue.
           </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          {/* Name picker */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block">
-              Display Name
+              Your Name
             </label>
             <div className="relative">
-              <User className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                value={displayName}
-                onChange={e => setDisplayName(e.target.value)}
-                placeholder="e.g. Sarah K."
+              <User className="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+              <select
+                value={selectedName}
+                onChange={e => setSelectedName(e.target.value as ReviewerName | '')}
                 autoFocus
-                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent"
-              />
+                className="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-lg text-sm appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent text-slate-700"
+              >
+                <option value="" disabled>Select your name…</option>
+                {REVIEWER_NAMES.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-3 top-2.5 text-slate-400 pointer-events-none" />
             </div>
           </div>
 
+          {/* Password */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block">
-              4-Digit PIN
+              Shared Password
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="password"
-                inputMode="numeric"
-                pattern="\d{4}"
-                maxLength={4}
-                value={pin}
-                onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder="••••"
-                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm font-mono tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Enter the shared password"
+                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent"
               />
             </div>
           </div>
@@ -130,14 +124,14 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !selectedName || !password}
             className="w-full py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
           >
             {loading ? 'Signing in…' : 'Continue'}
           </button>
 
           <p className="text-center text-[10px] text-slate-400 leading-relaxed">
-            Your PIN is hashed server-side. Source data and LLM classifications are never modified.
+            Source data and LLM classifications are never modified.
           </p>
         </form>
       </div>
