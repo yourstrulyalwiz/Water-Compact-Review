@@ -41,15 +41,17 @@ router.post(
       return;
     }
 
+    // Self-healing lookup: if this allowed name isn't seeded in the current
+    // database (e.g. production, where the dev seed never ran), create it.
+    // pin_hash is unused by this flow — filled with a random value to satisfy
+    // the NOT NULL constraint.
     const result = await pool.query(
-      "SELECT reviewer_id, display_name FROM reviewers WHERE display_name = $1",
+      `INSERT INTO reviewers (display_name, pin_hash)
+       VALUES ($1, crypt(gen_random_uuid()::text, gen_salt('bf')))
+       ON CONFLICT (display_name) DO UPDATE SET display_name = EXCLUDED.display_name
+       RETURNING reviewer_id, display_name`,
       [display_name.trim()],
     );
-
-    if (result.rows.length === 0) {
-      res.status(401).json({ error: "Reviewer not found" });
-      return;
-    }
 
     const { reviewer_id, display_name: name } = result.rows[0];
     const token = createReviewerToken(reviewer_id);
