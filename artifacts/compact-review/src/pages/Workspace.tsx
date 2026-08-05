@@ -17,7 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useLocation, useSearch } from 'wouter';
 import {
   ExternalLink, Search, ChevronLeft, ChevronRight, FileText, FileSignature,
-  CheckCircle2, AlertTriangle, Filter, User, Users,
+  CheckCircle2, AlertTriangle, Filter, User, Users, Download,
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -244,6 +244,22 @@ export default function Workspace() {
 
   const reviewedCount = candidates.filter(c => (c as any).review_count > 0).length;
 
+  // Build the CSV export URL from the current active filters (no limit/page).
+  const exportCsv = () => {
+    const p = new URLSearchParams();
+    if (filters.country !== 'All') p.set('country', filters.country);
+    if (filters.stream !== 'All') p.set('stream', filters.stream);
+    if (filters.inclusion_decision !== 'All') p.set('inclusion_decision', filters.inclusion_decision);
+    if (filters.confidence_level !== 'All') p.set('confidence_level', filters.confidence_level);
+    if (filters.anchor_confidence !== 'All') p.set('anchor_confidence', filters.anchor_confidence);
+    if (filters.reform_aspiration_status !== 'All') p.set('reform_aspiration_status', filters.reform_aspiration_status);
+    if (filters.reform_type_tier_1 !== 'All') p.set('reform_type_tier_1', filters.reform_type_tier_1);
+    if (filters.human_review_status !== 'All') p.set('human_review_status', filters.human_review_status);
+    if (debouncedSearch) p.set('search', debouncedSearch);
+    const qs = p.toString();
+    window.open(`/api/export/decisions.csv${qs ? `?${qs}` : ''}`, '_blank');
+  };
+
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-background overflow-hidden font-sans">
       {/* Reviewer Modal */}
@@ -271,6 +287,16 @@ export default function Workspace() {
         </div>
 
         <div className="flex items-center gap-4 flex-none">
+          {/* Export CSV button */}
+          <button
+            onClick={exportCsv}
+            title="Download all reviewer decisions as CSV"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md px-2.5 py-1 hover:bg-slate-50 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Export CSV</span>
+          </button>
+
           {/* Reviewer chip */}
           {reviewer ? (
             <div className="flex items-center gap-1.5 text-xs border border-border rounded-full px-2.5 py-1 bg-slate-50">
