@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ReviewerIdentity } from '@/hooks/use-reviewer';
-import { User, Lock, ChevronDown } from 'lucide-react';
+import { User, ChevronDown } from 'lucide-react';
 
 const REVIEWER_NAMES = ['Christina', 'Billy', 'Juliana', 'Patricia'] as const;
 type ReviewerName = typeof REVIEWER_NAMES[number];
@@ -11,7 +11,6 @@ interface ReviewerModalProps {
 
 export function ReviewerModal({ onLogin }: ReviewerModalProps) {
   const [selectedName, setSelectedName] = useState<ReviewerName | ''>('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -23,27 +22,18 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
       setError('Please select your name.');
       return;
     }
-    if (!password) {
-      setError('Please enter the shared password.');
-      return;
-    }
 
     setLoading(true);
     try {
       const res = await fetch('/api/reviewers/authenticate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ display_name: selectedName, password }),
+        body: JSON.stringify({ display_name: selectedName }),
       });
 
       if (res.ok) {
         const identity = await res.json() as ReviewerIdentity;
         onLogin(identity);
-        return;
-      }
-
-      if (res.status === 401) {
-        setError('Incorrect password. Please try again.');
         return;
       }
 
@@ -53,7 +43,7 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
       }
 
       const body = await res.json().catch(() => ({})) as { error?: string };
-      setError(body.error || 'Authentication failed. Please try again.');
+      setError(body.error || 'Sign-in failed. Please try again.');
     } catch {
       setError('Network error. Please check your connection and try again.');
     } finally {
@@ -68,16 +58,15 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
         <div className="bg-slate-900 px-6 py-5">
           <div className="flex items-center gap-3 mb-1">
             <User className="w-5 h-5 text-slate-400" />
-            <h2 className="text-white font-semibold text-base">Reviewer Sign-in</h2>
+            <h2 className="text-white font-semibold text-base">Select Reviewer</h2>
           </div>
           <p className="text-slate-400 text-xs leading-relaxed">
-            Select your name and enter the shared review password to continue.
+            Choose your name to begin reviewing.
           </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* Name picker */}
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block">
               Your Name
@@ -99,23 +88,6 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
             </div>
           </div>
 
-          {/* Password */}
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block">
-              Shared Password
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Enter the shared password"
-                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent"
-              />
-            </div>
-          </div>
-
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
               {error}
@@ -124,7 +96,7 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
 
           <button
             type="submit"
-            disabled={loading || !selectedName || !password}
+            disabled={loading || !selectedName}
             className="w-full py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
           >
             {loading ? 'Signing in…' : 'Continue'}

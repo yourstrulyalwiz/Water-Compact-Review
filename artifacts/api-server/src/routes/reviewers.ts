@@ -21,46 +21,23 @@ const authLimiter = rateLimit({
 /**
  * POST /api/reviewers/authenticate
  *
- * Accepts { display_name, password }.
- * Checks the supplied password against the REVIEWER_MASTER_PASSWORD env var,
- * then looks up the pre-seeded reviewer record and returns a signed token.
- *
- * Returns generic 401 for both wrong-password and unknown-name to prevent
- * enumeration.
+ * Accepts { display_name }.
+ * No password required — name must be one of the four fixed reviewers.
+ * Returns a signed token for the selected reviewer.
  */
 router.post(
   "/reviewers/authenticate",
   authLimiter,
   async (req, res): Promise<void> => {
-    const masterPassword = process.env.REVIEWER_MASTER_PASSWORD;
-    if (!masterPassword) {
-      res
-        .status(503)
-        .json({ error: "Authentication is not configured on this server." });
+    const { display_name } = req.body as { display_name?: string };
+
+    if (!display_name?.trim()) {
+      res.status(400).json({ error: "display_name is required" });
       return;
     }
 
-    const { display_name, password } = req.body as {
-      display_name?: string;
-      password?: string;
-    };
-
-    if (!display_name?.trim() || !password) {
-      res
-        .status(400)
-        .json({ error: "display_name and password are required" });
-      return;
-    }
-
-    // Reject unknown names before checking the password to avoid leaking
-    // timing information about known vs unknown names.
     if (!REVIEWER_NAMES.has(display_name.trim())) {
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-
-    if (password !== masterPassword) {
-      res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Unknown reviewer name" });
       return;
     }
 
@@ -70,8 +47,7 @@ router.post(
     );
 
     if (result.rows.length === 0) {
-      // Reviewer not seeded yet — shouldn't happen after migration 002
-      res.status(401).json({ error: "Invalid credentials" });
+      res.status(401).json({ error: "Reviewer not found" });
       return;
     }
 
