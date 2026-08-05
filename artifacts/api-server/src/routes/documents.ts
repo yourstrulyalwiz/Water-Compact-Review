@@ -5,10 +5,10 @@ import { pool } from "@workspace/db";
 
 const router: IRouter = Router();
 
-const DOCUMENTS_DIR = path.resolve(
-  process.cwd(),
-  "../../source_package/documents",
-);
+// Resolve relative to this compiled file so the path is correct in both
+// development (dist/ is rebuilt before start) and production (PDFs are
+// copied into dist/documents/ by the build step in build.mjs).
+const DOCUMENTS_DIR = new URL("./documents", import.meta.url).pathname;
 
 router.get("/documents", async (req, res): Promise<void> => {
   const result = await pool.query(`SELECT * FROM documents ORDER BY country`);

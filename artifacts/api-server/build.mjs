@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { rm, cp } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -118,6 +118,14 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  // Copy source PDFs into dist/documents/ so the route can find them in both
+  // dev (dist/ is rebuilt before start) and production (source_package/ is not
+  // deployed, but dist/ is).
+  const sourceDocsDir = path.resolve(artifactDir, "../../source_package/documents");
+  const distDocsDir = path.resolve(distDir, "documents");
+  await cp(sourceDocsDir, distDocsDir, { recursive: true });
+  console.log("Copied source PDFs → dist/documents/");
 }
 
 buildAll().catch((err) => {
