@@ -4,7 +4,7 @@ A read-only web application that lets policy experts validate LLM-identified ref
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/compact-review run dev` — run the frontend review app (port 25670, preview at `/`)
+- `pnpm --filter @workspace/compact-review run dev` — run the frontend review app (port 5173, preview at `/`)
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080, at `/api`)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
@@ -13,7 +13,7 @@ A read-only web application that lets policy experts validate LLM-identified ref
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
+- pnpm workspaces, Node.js 20, TypeScript 5.9
 - API: Express 5, raw SQL via `pg` pool (no Drizzle ORM for queries — schema is pre-existing)
 - DB: PostgreSQL (schema loaded from `source_package/schema_postgres.sql`)
 - Frontend: React 19 + Vite, TailwindCSS v4, shadcn/ui, react-resizable-panels

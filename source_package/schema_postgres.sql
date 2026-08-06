@@ -1,5 +1,15 @@
 BEGIN;
 
+-- pgcrypto is required for crypt() and gen_salt() used by the reviewers table.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS reviewers (
+  reviewer_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  display_name TEXT NOT NULL UNIQUE,
+  pin_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS documents (
   document_id text PRIMARY KEY,
   country text NOT NULL,
