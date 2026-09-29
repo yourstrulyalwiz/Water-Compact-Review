@@ -75,6 +75,28 @@ paths:
         "404":
           description: Not found
 
+  /documents/{documentId}/pdf:
+    get:
+      operationId: getDocumentPdf
+      tags: [documents]
+      summary: Stream the exact active-dataset PDF bytes
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: PDF bytes; X-Content-SHA256 is the expected manifest hash, not a substitute for client byte verification.
+          headers:
+            X-Content-SHA256:
+              schema: { type: string }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "404": { description: Document not found }
+        "503": { description: Active v5 dataset is not available }
+
   /candidates:
     get:
       operationId: listCandidates
@@ -89,6 +111,45 @@ paths:
           in: query
           schema:
             type: string
+        - name: final_status
+          in: query
+          schema: { type: string, enum: [Approved Reform, Rejected Non-reform, Consolidated, Pending] }
+        - name: view
+          in: query
+          schema: { type: string, enum: [all, review_actions, final_approved, qa_sample] }
+        - name: failed_criterion
+          in: query
+          schema: { type: string, enum: [C1, C2, C3, C4, C5, C6] }
+        - name: primary_pillar
+          in: query
+          schema: { type: string }
+        - name: tier1
+          in: query
+          schema: { type: string }
+        - name: tier2
+          in: query
+          schema: { type: string }
+        - name: scalable_solution
+          in: query
+          schema: { type: string }
+        - name: financing_relevance
+          in: query
+          schema: { type: string, enum: ["0", "1"] }
+        - name: temporal_status
+          in: query
+          schema: { type: string }
+        - name: cluster_role
+          in: query
+          schema: { type: string }
+        - name: global_decision
+          in: query
+          schema: { type: string }
+        - name: regional_decision
+          in: query
+          schema: { type: string }
+        - name: unresolved_issue
+          in: query
+          schema: { type: boolean }
         - name: inclusion_decision
           in: query
           schema:
@@ -134,7 +195,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CandidateListResponse"
+                $ref: "#/components/schemas/V5CandidateListResponse"
 
   /candidates/{candidateId}:
     get:
@@ -153,7 +214,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CandidateDetail"
+                $ref: "#/components/schemas/V5CandidateDetail"
         "404":
           description: Not found
 
@@ -161,7 +222,8 @@ paths:
     get:
       operationId: getAnchor
       tags: [anchors]
-      summary: Get a single anchor with its rectangles
+      summary: Retired legacy anchor endpoint
+      deprecated: true
       parameters:
         - name: anchorId
           in: path
@@ -215,12 +277,10 @@ paths:
     get:
       operationId: exportDecisionsCsv
       tags: [reviews]
-      summary: Download all reviewer decisions as a CSV file
+      summary: Download the active dataset's append-only review events as CSV
       description: >
-        Returns a UTF-8 CSV (with BOM for Excel) with one row per
-        reviewer–candidate pair. Candidates with no reviews appear with blank
-        reviewer columns so analysts can see coverage gaps. Accepts the same
-        filter query params as GET /candidates.
+        Returns revision-bound Global and Regional review events in long form.
+        Reviewer agreement is informational and does not authorize final status.
       parameters:
         - name: country
           in: query
@@ -271,6 +331,7 @@ paths:
       operationId: registerReviewer
       tags: [reviewers]
       summary: Register a new reviewer with name and PIN
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -288,12 +349,15 @@ paths:
           description: Validation error
         "409":
           description: Name already taken
+        "410":
+          description: Self-registration is retired
 
   /reviewers/login:
     post:
       operationId: loginReviewer
       tags: [reviewers]
       summary: Authenticate a reviewer by name and PIN
+      deprecated: true
       requestBody:
         required: true
         content:
@@ -311,6 +375,8 @@ paths:
           description: Wrong PIN
         "404":
           description: Reviewer not found
+        "410":
+          description: Login is retired
 
   /candidates/{candidateId}/reviews:
     get:
@@ -329,7 +395,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CandidateReviewsResponse"
+                $ref: "#/components/schemas/ReviewEventsResponse"
     post:
       operationId: submitCandidateReview
       tags: [reviews]
@@ -348,20 +414,192 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SubmitReviewRequest"
+              $ref: "#/components/schemas/ReviewEventInput"
       responses:
         "201":
           description: Review submitted
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CandidateReview"
+                $ref: "#/components/schemas/ReviewEvent"
         "400":
           description: Missing required fields
         "401":
           description: Missing or invalid Bearer token
         "404":
           description: Candidate not found
+        "409":
+          description: Assessment revision is stale
+
+  /reviewers/authenticate:
+    post:
+      operationId: authenticateReviewer
+      tags: [reviewers]
+      summary: Select a reviewer identity for prototype attribution
+      description: Name selection is not identity verification and grants no coordinator or finalization authority.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewerNameInput" }
+      responses:
+        "200":
+          description: Prototype attribution token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewerResponse" }
+        "400": { description: Invalid name }
+        "401": { description: Unknown reviewer }
+
+  /stage-resolutions:
+    post:
+      operationId: resolveReviewStage
+      tags: [reviews]
+      summary: Record an authoritative stage resolution
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StageResolutionInput" }
+      responses:
+        "201": { description: Resolution recorded }
+        "403": { description: Verified coordinator assignment required }
+        "409": { description: Assessment revision is stale }
+
+  /candidates/{candidateId}/assessment-proposals:
+    post:
+      operationId: proposeAssessmentRevision
+      tags: [reviews]
+      summary: Submit a revision-bound proposed assessment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: candidateId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssessmentProposalInput" }
+      responses:
+        "201": { description: Proposal recorded }
+        "409": { description: Assessment revision is stale }
+
+  /candidates/{candidateId}/finalizations:
+    post:
+      operationId: finalizeCandidate
+      tags: [reviews]
+      summary: Finalize only with verified authorization and all server-side gates
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: candidateId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FinalizationInput" }
+      responses:
+        "201": { description: Final status recorded }
+        "403": { description: Verified authorized coordinator required }
+        "409": { description: Revision or workflow prerequisites are stale or unmet }
+
+  /qa-checks:
+    get:
+      operationId: listQaChecks
+      tags: [candidates]
+      summary: List dataset QA queue
+      responses:
+        "200":
+          description: QA records for active dataset
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/JsonRecord" }
+
+  /evidence/{evidenceId}:
+    get:
+      operationId: getEvidence
+      tags: [candidates]
+      summary: Get active-dataset evidence with candidate links and rectangles
+      parameters:
+        - name: evidenceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Evidence detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JsonRecord" }
+        "404": { description: Evidence not found }
+
+  /evidence/{evidenceId}/corrections:
+    post:
+      operationId: submitEvidenceCorrection
+      tags: [reviews]
+      summary: Append a source-location correction without altering source evidence
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: evidenceId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EvidenceCorrectionInput" }
+      responses:
+        "201": { description: Correction recorded }
+        "409": { description: Candidate assessment revision is stale }
+
+  /export/master.csv:
+    get:
+      operationId: exportMasterCsv
+      tags: [reviews]
+      summary: Export all active dataset baseline fields plus current assessment
+      responses:
+        "200":
+          description: UTF-8 CSV
+          content:
+            text/csv: { schema: { type: string } }
+  /export/final-approved.csv:
+    get:
+      operationId: exportFinalApprovedCsv
+      tags: [reviews]
+      summary: Export only rows passing the server-side final-count gate
+      responses:
+        "200":
+          description: UTF-8 CSV, headed even when empty
+          content:
+            text/csv: { schema: { type: string } }
+  /export/review-history.csv:
+    get:
+      operationId: exportReviewHistoryCsv
+      tags: [reviews]
+      summary: Export append-only stage review history
+      responses:
+        "200":
+          description: UTF-8 CSV
+          content:
+            text/csv: { schema: { type: string } }
+  /export/evidence.csv:
+    get:
+      operationId: exportEvidenceCsv
+      tags: [reviews]
+      summary: Export active dataset evidence and provenance
+      responses:
+        "200":
+          description: UTF-8 CSV
+          content:
+            text/csv: { schema: { type: string } }
 
 components:
   securitySchemes:
@@ -769,24 +1007,27 @@ components:
     StatsResponse:
       type: object
       required:
+        - dataset_id
         - total_candidates
         - total_documents
-        - total_anchors
+        - total_evidence
         - total_relationships
+        - count_in_final_reform_total
         - by_country
         - by_stream
-        - by_inclusion_decision
-        - by_confidence_level
-        - by_anchor_confidence
-        - by_human_review_status
+        - by_final_status
       properties:
+        dataset_id:
+          type: string
         total_candidates:
           type: number
         total_documents:
           type: number
-        total_anchors:
+        total_evidence:
           type: number
         total_relationships:
+          type: number
+        count_in_final_reform_total:
           type: number
         by_country:
           type: array
@@ -796,19 +1037,122 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CountByKey"
-        by_inclusion_decision:
+        by_final_status:
           type: array
           items:
             $ref: "#/components/schemas/CountByKey"
-        by_confidence_level:
+
+    JsonRecord:
+      type: object
+      additionalProperties: true
+
+    V5Candidate:
+      allOf:
+        - $ref: "#/components/schemas/JsonRecord"
+      description: Dataset-scoped candidate baseline, current assessment, derived workflow state, and final-count gate.
+
+    V5CandidateListResponse:
+      type: object
+      required: [candidates, total, page, limit, dataset_id]
+      properties:
+        candidates:
           type: array
-          items:
-            $ref: "#/components/schemas/CountByKey"
-        by_anchor_confidence:
+          items: { $ref: "#/components/schemas/V5Candidate" }
+        total: { type: number }
+        page: { type: number }
+        limit: { type: number }
+        dataset_id: { type: string }
+
+    V5CandidateDetail:
+      allOf:
+        - $ref: "#/components/schemas/V5Candidate"
+        - type: object
+          properties:
+            evidence:
+              type: array
+              items: { $ref: "#/components/schemas/JsonRecord" }
+            relationships:
+              type: array
+              items: { $ref: "#/components/schemas/JsonRecord" }
+            review_events:
+              type: array
+              items: { $ref: "#/components/schemas/JsonRecord" }
+
+    ReviewerNameInput:
+      type: object
+      required: [display_name]
+      properties:
+        display_name: { type: string, minLength: 1 }
+
+    ReviewEventInput:
+      type: object
+      required: [stage, decision, expected_assessment_revision]
+      properties:
+        stage: { type: string, enum: [Global, Regional] }
+        decision:
+          type: string
+          enum: [Approve, Revise, Reject, Consolidate, Needs Discussion, Confirm, Confirm with Revision, Disagree, Pending]
+        comment: { type: ["string", "null"] }
+        expected_assessment_revision: { type: number, minimum: 1 }
+
+    ReviewEvent:
+      type: object
+      required: [event_id, candidate_id, stage, decision, assessment_revision, created_at]
+      properties:
+        event_id: { type: string }
+        candidate_id: { type: string }
+        reviewer_id: { type: string }
+        stage: { type: string }
+        decision: { type: string }
+        comment: { type: ["string", "null"] }
+        assessment_revision: { type: number }
+        created_at: { type: string }
+        identity_verified: { type: boolean }
+
+    ReviewEventsResponse:
+      type: object
+      required: [events, has_unresolved_disagreement]
+      properties:
+        events:
           type: array
-          items:
-            $ref: "#/components/schemas/CountByKey"
-        by_human_review_status:
-          type: array
-          items:
-            $ref: "#/components/schemas/CountByKey"
+          items: { $ref: "#/components/schemas/ReviewEvent" }
+        has_unresolved_disagreement: { type: boolean }
+
+    AssessmentProposalInput:
+      type: object
+      required: [expected_assessment_revision, changes, reason]
+      properties:
+        expected_assessment_revision: { type: number, minimum: 1 }
+        changes:
+          type: object
+          additionalProperties: true
+        reason: { type: string, minLength: 1 }
+
+    StageResolutionInput:
+      type: object
+      required: [dataset_id, candidate_id, stage, expected_assessment_revision, decision, reason]
+      properties:
+        dataset_id: { type: string }
+        candidate_id: { type: string }
+        stage: { type: string, enum: [Global, Regional] }
+        expected_assessment_revision: { type: number, minimum: 1 }
+        decision: { type: string }
+        reason: { type: string, minLength: 1 }
+
+    FinalizationInput:
+      type: object
+      required: [expected_assessment_revision, final_status, reason]
+      properties:
+        expected_assessment_revision: { type: number, minimum: 1 }
+        final_status: { type: string, enum: [Approved Reform, Rejected Non-reform, Consolidated, Pending] }
+        survivor_candidate_id: { type: ["string", "null"] }
+        reason: { type: string, minLength: 1 }
+
+    EvidenceCorrectionInput:
+      type: object
+      required: [expected_assessment_revision, reason]
+      properties:
+        expected_assessment_revision: { type: number, minimum: 1 }
+        corrected_page: { type: ["number", "null"], minimum: 1 }
+        correction: { type: object, additionalProperties: true }
+        reason: { type: string, minLength: 1 }

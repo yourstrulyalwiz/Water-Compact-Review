@@ -189,21 +189,173 @@ export interface CountByKey {
 }
 
 export interface StatsResponse {
+  dataset_id: string;
   total_candidates: number;
   total_documents: number;
-  total_anchors: number;
+  total_evidence: number;
   total_relationships: number;
+  count_in_final_reform_total: number;
   by_country: CountByKey[];
   by_stream: CountByKey[];
-  by_inclusion_decision: CountByKey[];
-  by_confidence_level: CountByKey[];
-  by_anchor_confidence: CountByKey[];
-  by_human_review_status: CountByKey[];
+  by_final_status: CountByKey[];
+}
+
+export interface JsonRecord { [key: string]: unknown }
+
+/**
+ * Dataset-scoped candidate baseline, current assessment, derived workflow state, and final-count gate.
+ */
+export type V5Candidate = JsonRecord;
+
+export interface V5CandidateListResponse {
+  candidates: V5Candidate[];
+  total: number;
+  page: number;
+  limit: number;
+  dataset_id: string;
+}
+
+export type V5CandidateDetail = V5Candidate & {
+  evidence?: JsonRecord[];
+  relationships?: JsonRecord[];
+  review_events?: JsonRecord[];
+};
+
+export interface ReviewerNameInput {
+  /** @minLength 1 */
+  display_name: string;
+}
+
+export type ReviewEventInputStage = typeof ReviewEventInputStage[keyof typeof ReviewEventInputStage];
+
+
+export const ReviewEventInputStage = {
+  Global: 'Global',
+  Regional: 'Regional',
+} as const;
+
+export type ReviewEventInputDecision = typeof ReviewEventInputDecision[keyof typeof ReviewEventInputDecision];
+
+
+export const ReviewEventInputDecision = {
+  Approve: 'Approve',
+  Revise: 'Revise',
+  Reject: 'Reject',
+  Consolidate: 'Consolidate',
+  Needs_Discussion: 'Needs Discussion',
+  Confirm: 'Confirm',
+  Confirm_with_Revision: 'Confirm with Revision',
+  Disagree: 'Disagree',
+  Pending: 'Pending',
+} as const;
+
+export interface ReviewEventInput {
+  stage: ReviewEventInputStage;
+  decision: ReviewEventInputDecision;
+  /** @nullable */
+  comment?: string | null;
+  /** @minimum 1 */
+  expected_assessment_revision: number;
+}
+
+export interface ReviewEvent {
+  event_id: string;
+  candidate_id: string;
+  reviewer_id?: string;
+  stage: string;
+  decision: string;
+  /** @nullable */
+  comment?: string | null;
+  assessment_revision: number;
+  created_at: string;
+  identity_verified?: boolean;
+}
+
+export interface ReviewEventsResponse {
+  events: ReviewEvent[];
+  has_unresolved_disagreement: boolean;
+}
+
+export type AssessmentProposalInputChanges = { [key: string]: unknown };
+
+export interface AssessmentProposalInput {
+  /** @minimum 1 */
+  expected_assessment_revision: number;
+  changes: AssessmentProposalInputChanges;
+  /** @minLength 1 */
+  reason: string;
+}
+
+export type StageResolutionInputStage = typeof StageResolutionInputStage[keyof typeof StageResolutionInputStage];
+
+
+export const StageResolutionInputStage = {
+  Global: 'Global',
+  Regional: 'Regional',
+} as const;
+
+export interface StageResolutionInput {
+  dataset_id: string;
+  candidate_id: string;
+  stage: StageResolutionInputStage;
+  /** @minimum 1 */
+  expected_assessment_revision: number;
+  decision: string;
+  /** @minLength 1 */
+  reason: string;
+}
+
+export type FinalizationInputFinalStatus = typeof FinalizationInputFinalStatus[keyof typeof FinalizationInputFinalStatus];
+
+
+export const FinalizationInputFinalStatus = {
+  Approved_Reform: 'Approved Reform',
+  'Rejected_Non-reform': 'Rejected Non-reform',
+  Consolidated: 'Consolidated',
+  Pending: 'Pending',
+} as const;
+
+export interface FinalizationInput {
+  /** @minimum 1 */
+  expected_assessment_revision: number;
+  final_status: FinalizationInputFinalStatus;
+  /** @nullable */
+  survivor_candidate_id?: string | null;
+  /** @minLength 1 */
+  reason: string;
+}
+
+export type EvidenceCorrectionInputCorrection = { [key: string]: unknown };
+
+export interface EvidenceCorrectionInput {
+  /** @minimum 1 */
+  expected_assessment_revision: number;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  corrected_page?: number | null;
+  correction?: EvidenceCorrectionInputCorrection;
+  /** @minLength 1 */
+  reason: string;
 }
 
 export type ListCandidatesParams = {
 country?: string;
 stream?: string;
+final_status?: ListCandidatesFinalStatus;
+view?: ListCandidatesView;
+failed_criterion?: ListCandidatesFailedCriterion;
+primary_pillar?: string;
+tier1?: string;
+tier2?: string;
+scalable_solution?: string;
+financing_relevance?: ListCandidatesFinancingRelevance;
+temporal_status?: string;
+cluster_role?: string;
+global_decision?: string;
+regional_decision?: string;
+unresolved_issue?: boolean;
 inclusion_decision?: string;
 confidence_level?: string;
 anchor_confidence?: string;
@@ -218,7 +370,59 @@ page?: number;
 limit?: number;
 };
 
+export type ListCandidatesFinalStatus = typeof ListCandidatesFinalStatus[keyof typeof ListCandidatesFinalStatus];
+
+
+export const ListCandidatesFinalStatus = {
+  Approved_Reform: 'Approved Reform',
+  'Rejected_Non-reform': 'Rejected Non-reform',
+  Consolidated: 'Consolidated',
+  Pending: 'Pending',
+} as const;
+
+export type ListCandidatesView = typeof ListCandidatesView[keyof typeof ListCandidatesView];
+
+
+export const ListCandidatesView = {
+  all: 'all',
+  review_actions: 'review_actions',
+  final_approved: 'final_approved',
+  qa_sample: 'qa_sample',
+} as const;
+
+export type ListCandidatesFailedCriterion = typeof ListCandidatesFailedCriterion[keyof typeof ListCandidatesFailedCriterion];
+
+
+export const ListCandidatesFailedCriterion = {
+  C1: 'C1',
+  C2: 'C2',
+  C3: 'C3',
+  C4: 'C4',
+  C5: 'C5',
+  C6: 'C6',
+} as const;
+
+export type ListCandidatesFinancingRelevance = typeof ListCandidatesFinancingRelevance[keyof typeof ListCandidatesFinancingRelevance];
+
+
+export const ListCandidatesFinancingRelevance = {
+  NUMBER_0: '0',
+  NUMBER_1: '1',
+} as const;
+
 export type ListRelationshipsParams = {
 candidateId?: string;
+};
+
+export type ExportDecisionsCsvParams = {
+country?: string;
+stream?: string;
+inclusion_decision?: string;
+confidence_level?: string;
+anchor_confidence?: string;
+reform_aspiration_status?: string;
+reform_type_tier_1?: string;
+human_review_status?: string;
+search?: string;
 };
 

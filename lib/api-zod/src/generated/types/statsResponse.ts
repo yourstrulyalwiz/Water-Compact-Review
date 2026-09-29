@@ -8,14 +8,13 @@
 import type { CountByKey } from './countByKey';
 
 export interface StatsResponse {
+  dataset_id: string;
   total_candidates: number;
   total_documents: number;
-  total_anchors: number;
+  total_evidence: number;
   total_relationships: number;
+  count_in_final_reform_total: number;
   by_country: CountByKey[];
   by_stream: CountByKey[];
-  by_inclusion_decision: CountByKey[];
-  by_confidence_level: CountByKey[];
-  by_anchor_confidence: CountByKey[];
-  by_human_review_status: CountByKey[];
+  by_final_status: CountByKey[];
 }

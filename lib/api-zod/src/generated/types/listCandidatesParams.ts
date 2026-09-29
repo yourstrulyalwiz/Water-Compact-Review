@@ -5,10 +5,27 @@
  * Water Compact Review API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListCandidatesFailedCriterion } from './listCandidatesFailedCriterion';
+import type { ListCandidatesFinalStatus } from './listCandidatesFinalStatus';
+import type { ListCandidatesFinancingRelevance } from './listCandidatesFinancingRelevance';
+import type { ListCandidatesView } from './listCandidatesView';
 
 export type ListCandidatesParams = {
 country?: string;
 stream?: string;
+final_status?: ListCandidatesFinalStatus;
+view?: ListCandidatesView;
+failed_criterion?: ListCandidatesFailedCriterion;
+primary_pillar?: string;
+tier1?: string;
+tier2?: string;
+scalable_solution?: string;
+financing_relevance?: ListCandidatesFinancingRelevance;
+temporal_status?: string;
+cluster_role?: string;
+global_decision?: string;
+regional_decision?: string;
+unresolved_issue?: boolean;
 inclusion_decision?: string;
 confidence_level?: string;
 anchor_confidence?: string;

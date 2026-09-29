@@ -68,6 +68,16 @@ export const GetDocumentResponse = zod.object({
 
 
 /**
+ * @summary Stream the exact active-dataset PDF bytes
+ */
+export const GetDocumentPdfParams = zod.object({
+  "documentId": zod.coerce.string()
+})
+
+export const GetDocumentPdfResponse = zod.unknown()
+
+
+/**
  * @summary List reform-action candidates with optional filters
  */
 export const listCandidatesQueryPageDefault = 1;
@@ -76,6 +86,19 @@ export const listCandidatesQueryLimitDefault = 50;
 export const ListCandidatesQueryParams = zod.object({
   "country": zod.coerce.string().optional(),
   "stream": zod.coerce.string().optional(),
+  "final_status": zod.enum(['Approved Reform', 'Rejected Non-reform', 'Consolidated', 'Pending']).optional(),
+  "view": zod.enum(['all', 'review_actions', 'final_approved', 'qa_sample']).optional(),
+  "failed_criterion": zod.enum(['C1', 'C2', 'C3', 'C4', 'C5', 'C6']).optional(),
+  "primary_pillar": zod.coerce.string().optional(),
+  "tier1": zod.coerce.string().optional(),
+  "tier2": zod.coerce.string().optional(),
+  "scalable_solution": zod.coerce.string().optional(),
+  "financing_relevance": zod.enum(['0', '1']).optional(),
+  "temporal_status": zod.coerce.string().optional(),
+  "cluster_role": zod.coerce.string().optional(),
+  "global_decision": zod.coerce.string().optional(),
+  "regional_decision": zod.coerce.string().optional(),
+  "unresolved_issue": zod.coerce.boolean().optional(),
   "inclusion_decision": zod.coerce.string().optional(),
   "confidence_level": zod.coerce.string().optional(),
   "anchor_confidence": zod.coerce.string().optional(),
@@ -88,37 +111,11 @@ export const ListCandidatesQueryParams = zod.object({
 })
 
 export const ListCandidatesResponse = zod.object({
-  "candidates": zod.array(zod.object({
-  "candidate_id": zod.string(),
-  "country": zod.string(),
-  "source_reference": zod.string(),
-  "compact_form": zod.string(),
-  "original_compact_text": zod.string(),
-  "standardized_candidate_reform_action": zod.string(),
-  "detailed_description": zod.string(),
-  "candidate_stream": zod.string(),
-  "inclusion_decision": zod.string(),
-  "reform_action_tag": zod.string(),
-  "count_in_reform_total": zod.string(),
-  "confidence_level": zod.string(),
-  "decision_rationale": zod.string(),
-  "water_security_pillar": zod.string(),
-  "solution_area": zod.string(),
-  "reform_type_tier_1": zod.string(),
-  "reform_type_tier_2": zod.string(),
-  "responsible_entity": zod.string(),
-  "related_parent_id": zod.string().nullish(),
-  "human_review_status": zod.string(),
-  "reviewer_comment": zod.string().nullish(),
-  "final_validated_action": zod.string().nullish(),
-  "reform_aspiration_status": zod.string(),
-  "criterion_assessment": zod.string(),
-  "review_count": zod.number().optional(),
-  "has_conflict": zod.boolean().optional()
-})),
+  "candidates": zod.array(zod.record(zod.string(), zod.unknown()).describe('Dataset-scoped candidate baseline, current assessment, derived workflow state, and final-count gate.')),
   "total": zod.number(),
   "page": zod.number(),
-  "limit": zod.number()
+  "limit": zod.number(),
+  "dataset_id": zod.string()
 })
 
 
@@ -129,85 +126,16 @@ export const GetCandidateParams = zod.object({
   "candidateId": zod.coerce.string()
 })
 
-export const GetCandidateResponse = zod.object({
-  "candidate_id": zod.string(),
-  "country": zod.string(),
-  "source_reference": zod.string(),
-  "compact_form": zod.string(),
-  "original_compact_text": zod.string(),
-  "standardized_candidate_reform_action": zod.string(),
-  "detailed_description": zod.string(),
-  "candidate_stream": zod.string(),
-  "inclusion_decision": zod.string(),
-  "reform_action_tag": zod.string(),
-  "count_in_reform_total": zod.string(),
-  "confidence_level": zod.string(),
-  "decision_rationale": zod.string(),
-  "water_security_pillar": zod.string(),
-  "solution_area": zod.string(),
-  "reform_type_tier_1": zod.string(),
-  "reform_type_tier_2": zod.string(),
-  "responsible_entity": zod.string(),
-  "related_parent_id": zod.string().nullish(),
-  "human_review_status": zod.string(),
-  "reviewer_comment": zod.string().nullish(),
-  "final_validated_action": zod.string().nullish(),
-  "reform_aspiration_status": zod.string(),
-  "criterion_assessment": zod.string(),
-  "review_count": zod.number().optional(),
-  "has_conflict": zod.boolean().optional()
-}).and(zod.object({
-  "anchors": zod.array(zod.object({
-  "anchor_id": zod.string(),
-  "candidate_id": zod.string(),
-  "document_id": zod.string(),
-  "anchor_role": zod.string(),
-  "anchor_type": zod.string(),
-  "linked_candidate_id": zod.string().nullish(),
-  "source_reference": zod.string(),
-  "page_start": zod.number(),
-  "page_end": zod.number(),
-  "matched_page": zod.number(),
-  "page_label": zod.string(),
-  "section_or_table": zod.string().nullish(),
-  "verbatim_source_text": zod.string(),
-  "normalized_source_text": zod.string().optional(),
-  "quote_sha256": zod.string().optional(),
-  "match_method": zod.string().optional(),
-  "match_score": zod.number().nullish(),
-  "token_f1": zod.number().nullish(),
-  "token_precision": zod.number().nullish(),
-  "token_recall": zod.number().nullish(),
-  "sequence_similarity": zod.number().nullish(),
-  "anchor_confidence": zod.string(),
-  "automated_validation_status": zod.string().optional(),
-  "human_review_status": zod.string(),
-  "reviewer_comment": zod.string().nullish(),
-  "created_at_utc": zod.string()
-}).and(zod.object({
-  "rectangles": zod.array(zod.object({
-  "rectangle_id": zod.string(),
-  "anchor_id": zod.string(),
-  "page_number": zod.number(),
-  "x0": zod.number(),
-  "y0": zod.number(),
-  "x1": zod.number(),
-  "y1": zod.number(),
-  "x0_normalized": zod.number(),
-  "y0_normalized": zod.number(),
-  "x1_normalized": zod.number(),
-  "y1_normalized": zod.number(),
-  "page_width_points": zod.number(),
-  "page_height_points": zod.number(),
-  "coordinate_origin": zod.string(),
-  "coordinate_unit": zod.string()
-}))
-})))
+export const GetCandidateResponse = zod.record(zod.string(), zod.unknown()).describe('Dataset-scoped candidate baseline, current assessment, derived workflow state, and final-count gate.').and(zod.object({
+  "evidence": zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  "relationships": zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  "review_events": zod.array(zod.record(zod.string(), zod.unknown())).optional()
 }))
 
 
 /**
- * @summary Get a single anchor with its rectangles
+ * @deprecated
+ * @summary Retired legacy anchor endpoint
  */
 export const GetAnchorParams = zod.object({
   "anchorId": zod.coerce.string()
@@ -286,10 +214,12 @@ export const ListRelationshipsResponse = zod.array(ListRelationshipsResponseItem
  * @summary Summary counts and breakdowns
  */
 export const GetStatsResponse = zod.object({
+  "dataset_id": zod.string(),
   "total_candidates": zod.number(),
   "total_documents": zod.number(),
-  "total_anchors": zod.number(),
+  "total_evidence": zod.number(),
   "total_relationships": zod.number(),
+  "count_in_final_reform_total": zod.number(),
   "by_country": zod.array(zod.object({
   "key": zod.string(),
   "count": zod.number()
@@ -298,19 +228,7 @@ export const GetStatsResponse = zod.object({
   "key": zod.string(),
   "count": zod.number()
 })),
-  "by_inclusion_decision": zod.array(zod.object({
-  "key": zod.string(),
-  "count": zod.number()
-})),
-  "by_confidence_level": zod.array(zod.object({
-  "key": zod.string(),
-  "count": zod.number()
-})),
-  "by_anchor_confidence": zod.array(zod.object({
-  "key": zod.string(),
-  "count": zod.number()
-})),
-  "by_human_review_status": zod.array(zod.object({
+  "by_final_status": zod.array(zod.object({
   "key": zod.string(),
   "count": zod.number()
 }))
@@ -318,6 +236,26 @@ export const GetStatsResponse = zod.object({
 
 
 /**
+ * Returns revision-bound Global and Regional review events in long form. Reviewer agreement is informational and does not authorize final status.
+ * @summary Download the active dataset's append-only review events as CSV
+ */
+export const ExportDecisionsCsvQueryParams = zod.object({
+  "country": zod.coerce.string().optional(),
+  "stream": zod.coerce.string().optional(),
+  "inclusion_decision": zod.coerce.string().optional(),
+  "confidence_level": zod.coerce.string().optional(),
+  "anchor_confidence": zod.coerce.string().optional(),
+  "reform_aspiration_status": zod.coerce.string().optional(),
+  "reform_type_tier_1": zod.coerce.string().optional(),
+  "human_review_status": zod.coerce.string().optional(),
+  "search": zod.coerce.string().optional()
+})
+
+export const ExportDecisionsCsvResponse = zod.unknown()
+
+
+/**
+ * @deprecated
  * @summary Register a new reviewer with name and PIN
  */
 export const RegisterReviewerBody = zod.object({
@@ -333,6 +271,7 @@ export const RegisterReviewerResponse = zod.object({
 
 
 /**
+ * @deprecated
  * @summary Authenticate a reviewer by name and PIN
  */
 export const LoginReviewerBody = zod.object({
@@ -355,16 +294,18 @@ export const ListCandidateReviewsParams = zod.object({
 })
 
 export const ListCandidateReviewsResponse = zod.object({
-  "reviews": zod.array(zod.object({
-  "review_id": zod.number(),
+  "events": zod.array(zod.object({
+  "event_id": zod.string(),
   "candidate_id": zod.string(),
-  "reviewer_id": zod.string(),
-  "reviewer_name": zod.string(),
-  "inclusion_decision": zod.string(),
+  "reviewer_id": zod.string().optional(),
+  "stage": zod.string(),
+  "decision": zod.string(),
   "comment": zod.string().nullish(),
-  "created_at": zod.string()
+  "assessment_revision": zod.number(),
+  "created_at": zod.string(),
+  "identity_verified": zod.boolean().optional()
 })),
-  "has_conflict": zod.boolean()
+  "has_unresolved_disagreement": zod.boolean()
 })
 
 
@@ -376,19 +317,167 @@ export const SubmitCandidateReviewParams = zod.object({
   "candidateId": zod.coerce.string()
 })
 
+
+
+
 export const SubmitCandidateReviewBody = zod.object({
-  "inclusion_decision": zod.string(),
-  "comment": zod.string().nullish()
+  "stage": zod.enum(['Global', 'Regional']),
+  "decision": zod.enum(['Approve', 'Revise', 'Reject', 'Consolidate', 'Needs Discussion', 'Confirm', 'Confirm with Revision', 'Disagree', 'Pending']),
+  "comment": zod.string().nullish(),
+  "expected_assessment_revision": zod.number().min(1)
 })
 
 export const SubmitCandidateReviewResponse = zod.object({
-  "review_id": zod.number(),
+  "event_id": zod.string(),
   "candidate_id": zod.string(),
-  "reviewer_id": zod.string(),
-  "reviewer_name": zod.string(),
-  "inclusion_decision": zod.string(),
+  "reviewer_id": zod.string().optional(),
+  "stage": zod.string(),
+  "decision": zod.string(),
   "comment": zod.string().nullish(),
-  "created_at": zod.string()
+  "assessment_revision": zod.number(),
+  "created_at": zod.string(),
+  "identity_verified": zod.boolean().optional()
 })
+
+
+/**
+ * Name selection is not identity verification and grants no coordinator or finalization authority.
+ * @summary Select a reviewer identity for prototype attribution
+ */
+
+
+
+export const AuthenticateReviewerBody = zod.object({
+  "display_name": zod.string().min(1)
+})
+
+export const AuthenticateReviewerResponse = zod.object({
+  "reviewer_id": zod.string(),
+  "display_name": zod.string(),
+  "token": zod.string().describe('Signed session token. Pass as Authorization Bearer on review submissions.')
+})
+
+
+/**
+ * @summary Record an authoritative stage resolution
+ */
+
+
+
+
+export const ResolveReviewStageBody = zod.object({
+  "dataset_id": zod.string(),
+  "candidate_id": zod.string(),
+  "stage": zod.enum(['Global', 'Regional']),
+  "expected_assessment_revision": zod.number().min(1),
+  "decision": zod.string(),
+  "reason": zod.string().min(1)
+})
+
+export const ResolveReviewStageResponse = zod.void()
+
+
+/**
+ * @summary Submit a revision-bound proposed assessment
+ */
+export const ProposeAssessmentRevisionParams = zod.object({
+  "candidateId": zod.coerce.string()
+})
+
+
+
+
+
+export const ProposeAssessmentRevisionBody = zod.object({
+  "expected_assessment_revision": zod.number().min(1),
+  "changes": zod.record(zod.string(), zod.unknown()),
+  "reason": zod.string().min(1)
+})
+
+export const ProposeAssessmentRevisionResponse = zod.void()
+
+
+/**
+ * @summary Finalize only with verified authorization and all server-side gates
+ */
+export const FinalizeCandidateParams = zod.object({
+  "candidateId": zod.coerce.string()
+})
+
+
+
+
+
+export const FinalizeCandidateBody = zod.object({
+  "expected_assessment_revision": zod.number().min(1),
+  "final_status": zod.enum(['Approved Reform', 'Rejected Non-reform', 'Consolidated', 'Pending']),
+  "survivor_candidate_id": zod.string().nullish(),
+  "reason": zod.string().min(1)
+})
+
+export const FinalizeCandidateResponse = zod.void()
+
+
+/**
+ * @summary List dataset QA queue
+ */
+export const ListQaChecksResponseItem = zod.record(zod.string(), zod.unknown())
+export const ListQaChecksResponse = zod.array(ListQaChecksResponseItem)
+
+
+/**
+ * @summary Get active-dataset evidence with candidate links and rectangles
+ */
+export const GetEvidenceParams = zod.object({
+  "evidenceId": zod.coerce.string()
+})
+
+export const GetEvidenceResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Append a source-location correction without altering source evidence
+ */
+export const SubmitEvidenceCorrectionParams = zod.object({
+  "evidenceId": zod.coerce.string()
+})
+
+
+
+
+
+
+export const SubmitEvidenceCorrectionBody = zod.object({
+  "expected_assessment_revision": zod.number().min(1),
+  "corrected_page": zod.number().min(1).nullish(),
+  "correction": zod.record(zod.string(), zod.unknown()).optional(),
+  "reason": zod.string().min(1)
+})
+
+export const SubmitEvidenceCorrectionResponse = zod.void()
+
+
+/**
+ * @summary Export all active dataset baseline fields plus current assessment
+ */
+export const ExportMasterCsvResponse = zod.unknown()
+
+
+/**
+ * @summary Export only rows passing the server-side final-count gate
+ */
+export const ExportFinalApprovedCsvResponse = zod.unknown()
+
+
+/**
+ * @summary Export append-only stage review history
+ */
+export const ExportReviewHistoryCsvResponse = zod.unknown()
+
+
+/**
+ * @summary Export active dataset evidence and provenance
+ */
+export const ExportEvidenceCsvResponse = zod.unknown()
 
 

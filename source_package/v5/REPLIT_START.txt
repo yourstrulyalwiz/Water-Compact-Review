@@ -1,0 +1,7 @@
+Update the existing Water-Compact-Review app using this attached v5 handoff package.
+
+Extract it to source_package/v5/ and read Water_Compact_v5_Programming_Instructions.md, import-manifest.json and candidate-field-map.json before coding. Use the four XLSX workbooks as the authoritative imported analytical baseline; keep the existing PostgreSQL/Express/React architecture for the live app and human review state.
+
+Implement the repository-specific migration, importer, evidence links, v5 fields and criteria, Global/Regional review workflow, exact-PDF verification, UI and exports described in the brief. Preserve legacy data/review history, immutable source evidence and issued candidate IDs. Import Candidates and the supporting data sheets; regenerate the presentation views. The expected baseline is 252 candidates across KHM/SLE/JAM/COD, 348 evidence passages, 350 candidate-evidence links, 968 rectangles and zero finally approved reforms.
+
+Inspect any repository changes since the commit identified in the brief. Implement and validate in development, provide the import report and test results, and document remaining reviewer-role/authentication configuration and rollback. Do not publish a deployment as part of this task.

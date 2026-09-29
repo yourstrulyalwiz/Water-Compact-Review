@@ -5,10 +5,20 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "compact:v5:validate": "tsx ./src/compact-v5-validate.ts",
+    "compact:v5:import": "tsx ./src/compact-v5-import.ts",
+    "compact:v5:activate": "tsx ./src/compact-v5-activate.ts",
+    "compact:v5:verify": "tsx ./src/compact-v5-verify.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.4.168",
+    "pg": "^8.22.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/pg": "^8.20.0",
     "tsx": "catalog:"
   }
 }

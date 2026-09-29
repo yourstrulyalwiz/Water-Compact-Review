@@ -1,0 +1,296 @@
+[
+  {
+    "position": 1,
+    "workbook_header": "Candidate_ID",
+    "api_and_database_name": "candidate_id",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 2,
+    "workbook_header": "Country",
+    "api_and_database_name": "country",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 3,
+    "workbook_header": "Source_Language",
+    "api_and_database_name": "source_language",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 4,
+    "workbook_header": "Source_Reference",
+    "api_and_database_name": "source_reference",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 5,
+    "workbook_header": "Compact_Form",
+    "api_and_database_name": "compact_form",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 6,
+    "workbook_header": "Evidence_Passage_Original_Language",
+    "api_and_database_name": "evidence_passage_original_language",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 7,
+    "workbook_header": "Evidence_Passage_English_Translation",
+    "api_and_database_name": "evidence_passage_english_translation",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 8,
+    "workbook_header": "Reform_Action_Text_Original_Language",
+    "api_and_database_name": "reform_action_text_original_language",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 9,
+    "workbook_header": "Reform_Action_Text_English_Translation",
+    "api_and_database_name": "reform_action_text_english_translation",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 10,
+    "workbook_header": "Candidate_Stream",
+    "api_and_database_name": "candidate_stream",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 11,
+    "workbook_header": "C1_Explicit_Commitment",
+    "api_and_database_name": "c1_explicit_commitment",
+    "storage_type": "smallint (0 or 1)",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 12,
+    "workbook_header": "C2_Discrete_Actionable_Mechanism",
+    "api_and_database_name": "c2_discrete_actionable_mechanism",
+    "storage_type": "smallint (0 or 1)",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 13,
+    "workbook_header": "C3_System_Change",
+    "api_and_database_name": "c3_system_change",
+    "storage_type": "smallint (0 or 1)",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 14,
+    "workbook_header": "C4_Not_Merely_Implementation",
+    "api_and_database_name": "c4_not_merely_implementation",
+    "storage_type": "smallint (0 or 1)",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 15,
+    "workbook_header": "C5_Distinct_Reform_Action",
+    "api_and_database_name": "c5_distinct_reform_action",
+    "storage_type": "smallint (0 or 1)",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 16,
+    "workbook_header": "C6_Trackable_Monitorable",
+    "api_and_database_name": "c6_trackable_monitorable",
+    "storage_type": "smallint (0 or 1)",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 17,
+    "workbook_header": "Six_Criteria_Pass",
+    "api_and_database_name": "six_criteria_pass",
+    "storage_type": "smallint (0 or 1)",
+    "role": "derived"
+  },
+  {
+    "position": 18,
+    "workbook_header": "LLM_Decision_Rationale",
+    "api_and_database_name": "llm_decision_rationale",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 19,
+    "workbook_header": "Cluster_ID",
+    "api_and_database_name": "cluster_id",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 20,
+    "workbook_header": "Cluster_Role",
+    "api_and_database_name": "cluster_role",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 21,
+    "workbook_header": "Parent_Reform_Action_ID",
+    "api_and_database_name": "parent_reform_action_id",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 22,
+    "workbook_header": "Primary_Pillar",
+    "api_and_database_name": "primary_pillar",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 23,
+    "workbook_header": "Primary_Scalable_Solution",
+    "api_and_database_name": "primary_scalable_solution",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 24,
+    "workbook_header": "Additional_Scalable_Solutions",
+    "api_and_database_name": "additional_scalable_solutions",
+    "storage_type": "text[] (retain original delimited text in import archive)",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 25,
+    "workbook_header": "Primary_Tier1_Reform_Domain",
+    "api_and_database_name": "primary_tier1_reform_domain",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 26,
+    "workbook_header": "Tier2_Reform_Category",
+    "api_and_database_name": "tier2_reform_category",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 27,
+    "workbook_header": "Secondary_Reform_Domain_Tags",
+    "api_and_database_name": "secondary_reform_domain_tags",
+    "storage_type": "text[] (retain original delimited text in import archive)",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 28,
+    "workbook_header": "Lead_Institution_Actor",
+    "api_and_database_name": "lead_institution_actor",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 29,
+    "workbook_header": "Water_Financing_Relevance",
+    "api_and_database_name": "water_financing_relevance",
+    "storage_type": "smallint (0 or 1)",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 30,
+    "workbook_header": "Temporal_Status",
+    "api_and_database_name": "temporal_status",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 31,
+    "workbook_header": "Monitoring_Completion_Criterion",
+    "api_and_database_name": "monitoring_completion_criterion",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 32,
+    "workbook_header": "Global_Review_Decision",
+    "api_and_database_name": "global_review_decision",
+    "storage_type": "text",
+    "role": "effective review state; imported baseline retained"
+  },
+  {
+    "position": 33,
+    "workbook_header": "Regional_Confirmation_Decision",
+    "api_and_database_name": "regional_confirmation_decision",
+    "storage_type": "text",
+    "role": "effective review state; imported baseline retained"
+  },
+  {
+    "position": 34,
+    "workbook_header": "Final_Status",
+    "api_and_database_name": "final_status",
+    "storage_type": "text",
+    "role": "effective review state; imported baseline retained"
+  },
+  {
+    "position": 35,
+    "workbook_header": "Count_in_Final_Reform_Total",
+    "api_and_database_name": "count_in_final_reform_total",
+    "storage_type": "smallint (0 or 1)",
+    "role": "derived"
+  },
+  {
+    "position": 36,
+    "workbook_header": "Reform_Action_Statement_English",
+    "api_and_database_name": "reform_action_statement_english",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 37,
+    "workbook_header": "Document_ID",
+    "api_and_database_name": "document_id",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 38,
+    "workbook_header": "Analysis_Run_ID",
+    "api_and_database_name": "analysis_run_id",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 39,
+    "workbook_header": "Analysis_Version_ID",
+    "api_and_database_name": "analysis_version_id",
+    "storage_type": "text",
+    "role": "immutable imported baseline; assessment revisions recorded separately"
+  },
+  {
+    "position": 40,
+    "workbook_header": "Global_Review_Comment",
+    "api_and_database_name": "global_review_comment",
+    "storage_type": "text",
+    "role": "effective review state; imported baseline retained"
+  },
+  {
+    "position": 41,
+    "workbook_header": "Regional_Comment",
+    "api_and_database_name": "regional_comment",
+    "storage_type": "text",
+    "role": "effective review state; imported baseline retained"
+  },
+  {
+    "position": 42,
+    "workbook_header": "Review_Resolution",
+    "api_and_database_name": "review_resolution",
+    "storage_type": "text",
+    "role": "effective review state; imported baseline retained"
+  }
+]

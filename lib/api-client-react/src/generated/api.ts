@@ -21,19 +21,26 @@ import type {
 
 import type {
   AnchorDetail,
-  CandidateDetail,
-  CandidateListResponse,
-  CandidateReview,
-  CandidateReviewsResponse,
+  AssessmentProposalInput,
   Document,
+  EvidenceCorrectionInput,
+  ExportDecisionsCsvParams,
+  FinalizationInput,
   HealthStatus,
+  JsonRecord,
   ListCandidatesParams,
   ListRelationshipsParams,
   Relationship,
+  ReviewEvent,
+  ReviewEventInput,
+  ReviewEventsResponse,
   ReviewerCredentials,
+  ReviewerNameInput,
   ReviewerResponse,
+  StageResolutionInput,
   StatsResponse,
-  SubmitReviewRequest
+  V5CandidateDetail,
+  V5CandidateListResponse
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -294,6 +301,83 @@ export function useGetDocument<TData = Awaited<ReturnType<typeof getDocument>>, 
 
 
 
+export const getGetDocumentPdfUrl = (documentId: string,) => {
+
+
+
+
+  return `/api/documents/${documentId}/pdf`
+}
+
+/**
+ * @summary Stream the exact active-dataset PDF bytes
+ */
+export const getDocumentPdf = async (documentId: string, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetDocumentPdfUrl(documentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDocumentPdfQueryKey = (documentId: string,) => {
+    return [
+    `/api/documents/${documentId}/pdf`
+    ] as const;
+    }
+
+
+export const getGetDocumentPdfQueryOptions = <TData = Awaited<ReturnType<typeof getDocumentPdf>>, TError = ErrorType<void>>(documentId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDocumentPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDocumentPdfQueryKey(documentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocumentPdf>>> = ({ signal }) => getDocumentPdf(documentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: documentId !== null && documentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDocumentPdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDocumentPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getDocumentPdf>>>
+export type GetDocumentPdfQueryError = ErrorType<void>
+
+
+/**
+ * @summary Stream the exact active-dataset PDF bytes
+ */
+
+export function useGetDocumentPdf<TData = Awaited<ReturnType<typeof getDocumentPdf>>, TError = ErrorType<void>>(
+ documentId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDocumentPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDocumentPdfQueryOptions(documentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListCandidatesUrl = (params?: ListCandidatesParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -312,9 +396,9 @@ export const getListCandidatesUrl = (params?: ListCandidatesParams,) => {
 /**
  * @summary List reform-action candidates with optional filters
  */
-export const listCandidates = async (params?: ListCandidatesParams, options?: Parameters<typeof customFetch>[1]): Promise<CandidateListResponse> => {
+export const listCandidates = async (params?: ListCandidatesParams, options?: Parameters<typeof customFetch>[1]): Promise<V5CandidateListResponse> => {
 
-  return customFetch<CandidateListResponse>(getListCandidatesUrl(params),
+  return customFetch<V5CandidateListResponse>(getListCandidatesUrl(params),
   {
     ...options,
     method: 'GET'
@@ -389,9 +473,9 @@ export const getGetCandidateUrl = (candidateId: string,) => {
 /**
  * @summary Get a single candidate with all anchors
  */
-export const getCandidate = async (candidateId: string, options?: Parameters<typeof customFetch>[1]): Promise<CandidateDetail> => {
+export const getCandidate = async (candidateId: string, options?: Parameters<typeof customFetch>[1]): Promise<V5CandidateDetail> => {
 
-  return customFetch<CandidateDetail>(getGetCandidateUrl(candidateId),
+  return customFetch<V5CandidateDetail>(getGetCandidateUrl(candidateId),
   {
     ...options,
     method: 'GET'
@@ -464,7 +548,8 @@ export const getGetAnchorUrl = (anchorId: string,) => {
 }
 
 /**
- * @summary Get a single anchor with its rectangles
+ * @deprecated
+ * @summary Retired legacy anchor endpoint
  */
 export const getAnchor = async (anchorId: string, options?: Parameters<typeof customFetch>[1]): Promise<AnchorDetail> => {
 
@@ -511,7 +596,8 @@ export type GetAnchorQueryError = ErrorType<void>
 
 
 /**
- * @summary Get a single anchor with its rectangles
+ * @deprecated
+ * @summary Retired legacy anchor endpoint
  */
 
 export function useGetAnchor<TData = Awaited<ReturnType<typeof getAnchor>>, TError = ErrorType<void>>(
@@ -693,6 +779,91 @@ export function useGetStats<TData = Awaited<ReturnType<typeof getStats>>, TError
 
 
 
+export const getExportDecisionsCsvUrl = (params?: ExportDecisionsCsvParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/export/decisions.csv?${stringifiedParams}` : `/api/export/decisions.csv`
+}
+
+/**
+ * Returns revision-bound Global and Regional review events in long form. Reviewer agreement is informational and does not authorize final status.
+ * @summary Download the active dataset's append-only review events as CSV
+ */
+export const exportDecisionsCsv = async (params?: ExportDecisionsCsvParams, options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getExportDecisionsCsvUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportDecisionsCsvQueryKey = (params?: ExportDecisionsCsvParams,) => {
+    return [
+    `/api/export/decisions.csv`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportDecisionsCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportDecisionsCsv>>, TError = ErrorType<unknown>>(params?: ExportDecisionsCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportDecisionsCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportDecisionsCsvQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportDecisionsCsv>>> = ({ signal }) => exportDecisionsCsv(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportDecisionsCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportDecisionsCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportDecisionsCsv>>>
+export type ExportDecisionsCsvQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Download the active dataset's append-only review events as CSV
+ */
+
+export function useExportDecisionsCsv<TData = Awaited<ReturnType<typeof exportDecisionsCsv>>, TError = ErrorType<unknown>>(
+ params?: ExportDecisionsCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportDecisionsCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportDecisionsCsvQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getRegisterReviewerUrl = () => {
 
 
@@ -702,6 +873,7 @@ export const getRegisterReviewerUrl = () => {
 }
 
 /**
+ * @deprecated
  * @summary Register a new reviewer with name and PIN
  */
 export const registerReviewer = async (reviewerCredentials: ReviewerCredentials, options?: Parameters<typeof customFetch>[1]): Promise<ReviewerResponse> => {
@@ -751,6 +923,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RegisterReviewerMutationError = ErrorType<void>
 
     /**
+ * @deprecated
  * @summary Register a new reviewer with name and PIN
  */
 export const useRegisterReviewer = <TError = ErrorType<void>,
@@ -773,6 +946,7 @@ export const getLoginReviewerUrl = () => {
 }
 
 /**
+ * @deprecated
  * @summary Authenticate a reviewer by name and PIN
  */
 export const loginReviewer = async (reviewerCredentials: ReviewerCredentials, options?: Parameters<typeof customFetch>[1]): Promise<ReviewerResponse> => {
@@ -822,6 +996,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type LoginReviewerMutationError = ErrorType<void>
 
     /**
+ * @deprecated
  * @summary Authenticate a reviewer by name and PIN
  */
 export const useLoginReviewer = <TError = ErrorType<void>,
@@ -846,9 +1021,9 @@ export const getListCandidateReviewsUrl = (candidateId: string,) => {
 /**
  * @summary List all human reviews for a candidate
  */
-export const listCandidateReviews = async (candidateId: string, options?: Parameters<typeof customFetch>[1]): Promise<CandidateReviewsResponse> => {
+export const listCandidateReviews = async (candidateId: string, options?: Parameters<typeof customFetch>[1]): Promise<ReviewEventsResponse> => {
 
-  return customFetch<CandidateReviewsResponse>(getListCandidateReviewsUrl(candidateId),
+  return customFetch<ReviewEventsResponse>(getListCandidateReviewsUrl(candidateId),
   {
     ...options,
     method: 'GET'
@@ -925,14 +1100,14 @@ export const getSubmitCandidateReviewUrl = (candidateId: string,) => {
  * @summary Submit a review decision for a candidate
  */
 export const submitCandidateReview = async (candidateId: string,
-    submitReviewRequest: SubmitReviewRequest, options?: Parameters<typeof customFetch>[1]): Promise<CandidateReview> => {
+    reviewEventInput: ReviewEventInput, options?: Parameters<typeof customFetch>[1]): Promise<ReviewEvent> => {
 
-  return customFetch<CandidateReview>(getSubmitCandidateReviewUrl(candidateId),
+  return customFetch<ReviewEvent>(getSubmitCandidateReviewUrl(candidateId),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(submitReviewRequest)
+    body: JSON.stringify(reviewEventInput)
   }
 );}
 
@@ -941,8 +1116,8 @@ export const submitCandidateReview = async (candidateId: string,
 
 
 export const getSubmitCandidateReviewMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCandidateReview>>, TError,{candidateId: string;data: BodyType<SubmitReviewRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof submitCandidateReview>>, TError,{candidateId: string;data: BodyType<SubmitReviewRequest>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCandidateReview>>, TError,{candidateId: string;data: BodyType<ReviewEventInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitCandidateReview>>, TError,{candidateId: string;data: BodyType<ReviewEventInput>}, TContext> => {
 
 const mutationKey = ['submitCandidateReview'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -954,7 +1129,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitCandidateReview>>, {candidateId: string;data: BodyType<SubmitReviewRequest>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitCandidateReview>>, {candidateId: string;data: BodyType<ReviewEventInput>}> = (props) => {
           const {candidateId,data} = props ?? {};
 
           return  submitCandidateReview(candidateId,data,requestOptions)
@@ -968,20 +1143,841 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type SubmitCandidateReviewMutationResult = NonNullable<Awaited<ReturnType<typeof submitCandidateReview>>>
-    export type SubmitCandidateReviewMutationBody = BodyType<SubmitReviewRequest>
+    export type SubmitCandidateReviewMutationBody = BodyType<ReviewEventInput>
     export type SubmitCandidateReviewMutationError = ErrorType<void>
 
     /**
  * @summary Submit a review decision for a candidate
  */
 export const useSubmitCandidateReview = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCandidateReview>>, TError,{candidateId: string;data: BodyType<SubmitReviewRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitCandidateReview>>, TError,{candidateId: string;data: BodyType<ReviewEventInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof submitCandidateReview>>,
         TError,
-        {candidateId: string;data: BodyType<SubmitReviewRequest>},
+        {candidateId: string;data: BodyType<ReviewEventInput>},
         TContext
       > => {
       return useMutation(getSubmitCandidateReviewMutationOptions(options));
     }
+
+export const getAuthenticateReviewerUrl = () => {
+
+
+
+
+  return `/api/reviewers/authenticate`
+}
+
+/**
+ * Name selection is not identity verification and grants no coordinator or finalization authority.
+ * @summary Select a reviewer identity for prototype attribution
+ */
+export const authenticateReviewer = async (reviewerNameInput: ReviewerNameInput, options?: Parameters<typeof customFetch>[1]): Promise<ReviewerResponse> => {
+
+  return customFetch<ReviewerResponse>(getAuthenticateReviewerUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reviewerNameInput)
+  }
+);}
+
+
+
+
+
+export const getAuthenticateReviewerMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authenticateReviewer>>, TError,{data: BodyType<ReviewerNameInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof authenticateReviewer>>, TError,{data: BodyType<ReviewerNameInput>}, TContext> => {
+
+const mutationKey = ['authenticateReviewer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof authenticateReviewer>>, {data: BodyType<ReviewerNameInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  authenticateReviewer(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AuthenticateReviewerMutationResult = NonNullable<Awaited<ReturnType<typeof authenticateReviewer>>>
+    export type AuthenticateReviewerMutationBody = BodyType<ReviewerNameInput>
+    export type AuthenticateReviewerMutationError = ErrorType<void>
+
+    /**
+ * @summary Select a reviewer identity for prototype attribution
+ */
+export const useAuthenticateReviewer = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof authenticateReviewer>>, TError,{data: BodyType<ReviewerNameInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof authenticateReviewer>>,
+        TError,
+        {data: BodyType<ReviewerNameInput>},
+        TContext
+      > => {
+      return useMutation(getAuthenticateReviewerMutationOptions(options));
+    }
+
+export const getResolveReviewStageUrl = () => {
+
+
+
+
+  return `/api/stage-resolutions`
+}
+
+/**
+ * @summary Record an authoritative stage resolution
+ */
+export const resolveReviewStage = async (stageResolutionInput: StageResolutionInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getResolveReviewStageUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(stageResolutionInput)
+  }
+);}
+
+
+
+
+
+export const getResolveReviewStageMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveReviewStage>>, TError,{data: BodyType<StageResolutionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resolveReviewStage>>, TError,{data: BodyType<StageResolutionInput>}, TContext> => {
+
+const mutationKey = ['resolveReviewStage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resolveReviewStage>>, {data: BodyType<StageResolutionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  resolveReviewStage(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResolveReviewStageMutationResult = NonNullable<Awaited<ReturnType<typeof resolveReviewStage>>>
+    export type ResolveReviewStageMutationBody = BodyType<StageResolutionInput>
+    export type ResolveReviewStageMutationError = ErrorType<void>
+
+    /**
+ * @summary Record an authoritative stage resolution
+ */
+export const useResolveReviewStage = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveReviewStage>>, TError,{data: BodyType<StageResolutionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resolveReviewStage>>,
+        TError,
+        {data: BodyType<StageResolutionInput>},
+        TContext
+      > => {
+      return useMutation(getResolveReviewStageMutationOptions(options));
+    }
+
+export const getProposeAssessmentRevisionUrl = (candidateId: string,) => {
+
+
+
+
+  return `/api/candidates/${candidateId}/assessment-proposals`
+}
+
+/**
+ * @summary Submit a revision-bound proposed assessment
+ */
+export const proposeAssessmentRevision = async (candidateId: string,
+    assessmentProposalInput: AssessmentProposalInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getProposeAssessmentRevisionUrl(candidateId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(assessmentProposalInput)
+  }
+);}
+
+
+
+
+
+export const getProposeAssessmentRevisionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof proposeAssessmentRevision>>, TError,{candidateId: string;data: BodyType<AssessmentProposalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof proposeAssessmentRevision>>, TError,{candidateId: string;data: BodyType<AssessmentProposalInput>}, TContext> => {
+
+const mutationKey = ['proposeAssessmentRevision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof proposeAssessmentRevision>>, {candidateId: string;data: BodyType<AssessmentProposalInput>}> = (props) => {
+          const {candidateId,data} = props ?? {};
+
+          return  proposeAssessmentRevision(candidateId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProposeAssessmentRevisionMutationResult = NonNullable<Awaited<ReturnType<typeof proposeAssessmentRevision>>>
+    export type ProposeAssessmentRevisionMutationBody = BodyType<AssessmentProposalInput>
+    export type ProposeAssessmentRevisionMutationError = ErrorType<void>
+
+    /**
+ * @summary Submit a revision-bound proposed assessment
+ */
+export const useProposeAssessmentRevision = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof proposeAssessmentRevision>>, TError,{candidateId: string;data: BodyType<AssessmentProposalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof proposeAssessmentRevision>>,
+        TError,
+        {candidateId: string;data: BodyType<AssessmentProposalInput>},
+        TContext
+      > => {
+      return useMutation(getProposeAssessmentRevisionMutationOptions(options));
+    }
+
+export const getFinalizeCandidateUrl = (candidateId: string,) => {
+
+
+
+
+  return `/api/candidates/${candidateId}/finalizations`
+}
+
+/**
+ * @summary Finalize only with verified authorization and all server-side gates
+ */
+export const finalizeCandidate = async (candidateId: string,
+    finalizationInput: FinalizationInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getFinalizeCandidateUrl(candidateId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(finalizationInput)
+  }
+);}
+
+
+
+
+
+export const getFinalizeCandidateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeCandidate>>, TError,{candidateId: string;data: BodyType<FinalizationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof finalizeCandidate>>, TError,{candidateId: string;data: BodyType<FinalizationInput>}, TContext> => {
+
+const mutationKey = ['finalizeCandidate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof finalizeCandidate>>, {candidateId: string;data: BodyType<FinalizationInput>}> = (props) => {
+          const {candidateId,data} = props ?? {};
+
+          return  finalizeCandidate(candidateId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FinalizeCandidateMutationResult = NonNullable<Awaited<ReturnType<typeof finalizeCandidate>>>
+    export type FinalizeCandidateMutationBody = BodyType<FinalizationInput>
+    export type FinalizeCandidateMutationError = ErrorType<void>
+
+    /**
+ * @summary Finalize only with verified authorization and all server-side gates
+ */
+export const useFinalizeCandidate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeCandidate>>, TError,{candidateId: string;data: BodyType<FinalizationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof finalizeCandidate>>,
+        TError,
+        {candidateId: string;data: BodyType<FinalizationInput>},
+        TContext
+      > => {
+      return useMutation(getFinalizeCandidateMutationOptions(options));
+    }
+
+export const getListQaChecksUrl = () => {
+
+
+
+
+  return `/api/qa-checks`
+}
+
+/**
+ * @summary List dataset QA queue
+ */
+export const listQaChecks = async ( options?: Parameters<typeof customFetch>[1]): Promise<JsonRecord[]> => {
+
+  return customFetch<JsonRecord[]>(getListQaChecksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListQaChecksQueryKey = () => {
+    return [
+    `/api/qa-checks`
+    ] as const;
+    }
+
+
+export const getListQaChecksQueryOptions = <TData = Awaited<ReturnType<typeof listQaChecks>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listQaChecks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListQaChecksQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listQaChecks>>> = ({ signal }) => listQaChecks({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listQaChecks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListQaChecksQueryResult = NonNullable<Awaited<ReturnType<typeof listQaChecks>>>
+export type ListQaChecksQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List dataset QA queue
+ */
+
+export function useListQaChecks<TData = Awaited<ReturnType<typeof listQaChecks>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listQaChecks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListQaChecksQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetEvidenceUrl = (evidenceId: string,) => {
+
+
+
+
+  return `/api/evidence/${evidenceId}`
+}
+
+/**
+ * @summary Get active-dataset evidence with candidate links and rectangles
+ */
+export const getEvidence = async (evidenceId: string, options?: Parameters<typeof customFetch>[1]): Promise<JsonRecord> => {
+
+  return customFetch<JsonRecord>(getGetEvidenceUrl(evidenceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetEvidenceQueryKey = (evidenceId: string,) => {
+    return [
+    `/api/evidence/${evidenceId}`
+    ] as const;
+    }
+
+
+export const getGetEvidenceQueryOptions = <TData = Awaited<ReturnType<typeof getEvidence>>, TError = ErrorType<void>>(evidenceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEvidence>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetEvidenceQueryKey(evidenceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEvidence>>> = ({ signal }) => getEvidence(evidenceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: evidenceId !== null && evidenceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getEvidence>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetEvidenceQueryResult = NonNullable<Awaited<ReturnType<typeof getEvidence>>>
+export type GetEvidenceQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get active-dataset evidence with candidate links and rectangles
+ */
+
+export function useGetEvidence<TData = Awaited<ReturnType<typeof getEvidence>>, TError = ErrorType<void>>(
+ evidenceId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEvidence>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetEvidenceQueryOptions(evidenceId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitEvidenceCorrectionUrl = (evidenceId: string,) => {
+
+
+
+
+  return `/api/evidence/${evidenceId}/corrections`
+}
+
+/**
+ * @summary Append a source-location correction without altering source evidence
+ */
+export const submitEvidenceCorrection = async (evidenceId: string,
+    evidenceCorrectionInput: EvidenceCorrectionInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getSubmitEvidenceCorrectionUrl(evidenceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(evidenceCorrectionInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitEvidenceCorrectionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitEvidenceCorrection>>, TError,{evidenceId: string;data: BodyType<EvidenceCorrectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitEvidenceCorrection>>, TError,{evidenceId: string;data: BodyType<EvidenceCorrectionInput>}, TContext> => {
+
+const mutationKey = ['submitEvidenceCorrection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitEvidenceCorrection>>, {evidenceId: string;data: BodyType<EvidenceCorrectionInput>}> = (props) => {
+          const {evidenceId,data} = props ?? {};
+
+          return  submitEvidenceCorrection(evidenceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitEvidenceCorrectionMutationResult = NonNullable<Awaited<ReturnType<typeof submitEvidenceCorrection>>>
+    export type SubmitEvidenceCorrectionMutationBody = BodyType<EvidenceCorrectionInput>
+    export type SubmitEvidenceCorrectionMutationError = ErrorType<void>
+
+    /**
+ * @summary Append a source-location correction without altering source evidence
+ */
+export const useSubmitEvidenceCorrection = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitEvidenceCorrection>>, TError,{evidenceId: string;data: BodyType<EvidenceCorrectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitEvidenceCorrection>>,
+        TError,
+        {evidenceId: string;data: BodyType<EvidenceCorrectionInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitEvidenceCorrectionMutationOptions(options));
+    }
+
+export const getExportMasterCsvUrl = () => {
+
+
+
+
+  return `/api/export/master.csv`
+}
+
+/**
+ * @summary Export all active dataset baseline fields plus current assessment
+ */
+export const exportMasterCsv = async ( options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getExportMasterCsvUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportMasterCsvQueryKey = () => {
+    return [
+    `/api/export/master.csv`
+    ] as const;
+    }
+
+
+export const getExportMasterCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportMasterCsv>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportMasterCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportMasterCsvQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportMasterCsv>>> = ({ signal }) => exportMasterCsv({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportMasterCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportMasterCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportMasterCsv>>>
+export type ExportMasterCsvQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Export all active dataset baseline fields plus current assessment
+ */
+
+export function useExportMasterCsv<TData = Awaited<ReturnType<typeof exportMasterCsv>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportMasterCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportMasterCsvQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getExportFinalApprovedCsvUrl = () => {
+
+
+
+
+  return `/api/export/final-approved.csv`
+}
+
+/**
+ * @summary Export only rows passing the server-side final-count gate
+ */
+export const exportFinalApprovedCsv = async ( options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getExportFinalApprovedCsvUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportFinalApprovedCsvQueryKey = () => {
+    return [
+    `/api/export/final-approved.csv`
+    ] as const;
+    }
+
+
+export const getExportFinalApprovedCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportFinalApprovedCsv>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportFinalApprovedCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportFinalApprovedCsvQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportFinalApprovedCsv>>> = ({ signal }) => exportFinalApprovedCsv({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportFinalApprovedCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportFinalApprovedCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportFinalApprovedCsv>>>
+export type ExportFinalApprovedCsvQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Export only rows passing the server-side final-count gate
+ */
+
+export function useExportFinalApprovedCsv<TData = Awaited<ReturnType<typeof exportFinalApprovedCsv>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportFinalApprovedCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportFinalApprovedCsvQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getExportReviewHistoryCsvUrl = () => {
+
+
+
+
+  return `/api/export/review-history.csv`
+}
+
+/**
+ * @summary Export append-only stage review history
+ */
+export const exportReviewHistoryCsv = async ( options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getExportReviewHistoryCsvUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportReviewHistoryCsvQueryKey = () => {
+    return [
+    `/api/export/review-history.csv`
+    ] as const;
+    }
+
+
+export const getExportReviewHistoryCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportReviewHistoryCsv>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportReviewHistoryCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportReviewHistoryCsvQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportReviewHistoryCsv>>> = ({ signal }) => exportReviewHistoryCsv({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportReviewHistoryCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportReviewHistoryCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportReviewHistoryCsv>>>
+export type ExportReviewHistoryCsvQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Export append-only stage review history
+ */
+
+export function useExportReviewHistoryCsv<TData = Awaited<ReturnType<typeof exportReviewHistoryCsv>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportReviewHistoryCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportReviewHistoryCsvQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getExportEvidenceCsvUrl = () => {
+
+
+
+
+  return `/api/export/evidence.csv`
+}
+
+/**
+ * @summary Export active dataset evidence and provenance
+ */
+export const exportEvidenceCsv = async ( options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getExportEvidenceCsvUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportEvidenceCsvQueryKey = () => {
+    return [
+    `/api/export/evidence.csv`
+    ] as const;
+    }
+
+
+export const getExportEvidenceCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportEvidenceCsv>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportEvidenceCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportEvidenceCsvQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportEvidenceCsv>>> = ({ signal }) => exportEvidenceCsv({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportEvidenceCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportEvidenceCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportEvidenceCsv>>>
+export type ExportEvidenceCsvQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Export active dataset evidence and provenance
+ */
+
+export function useExportEvidenceCsv<TData = Awaited<ReturnType<typeof exportEvidenceCsv>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportEvidenceCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportEvidenceCsvQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 

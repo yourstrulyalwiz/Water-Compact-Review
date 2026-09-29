@@ -1,940 +1,389 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import {
-  useListCandidates,
-  useGetCandidate,
-  useGetDocument,
-  useGetStats,
-  useListRelationships,
-} from '@workspace/api-client-react';
+import { useLocation, useSearch } from 'wouter';
+import { AlertTriangle, ChevronLeft, ChevronRight, Download, FileSignature, FileText, Filter, Search, User } from 'lucide-react';
 import { PdfViewer } from '@/components/PdfViewer';
 import { ReviewerModal } from '@/components/ReviewerModal';
 import { useReviewer } from '@/hooks/use-reviewer';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useLocation, useSearch } from 'wouter';
-import {
-  ExternalLink, Search, ChevronLeft, ChevronRight, FileText, FileSignature,
-  CheckCircle2, AlertTriangle, Filter, User, Users, Download,
-} from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+const STREAMS = ['High-confidence Reform Action', 'Needs Human Review', 'High-confidence Non-reform'];
+const GLOBAL_DECISIONS = ['Approve', 'Revise', 'Reject', 'Consolidate', 'Needs Discussion'];
+const REGIONAL_DECISIONS = ['Confirm', 'Confirm with Revision', 'Disagree', 'Needs Discussion', 'Pending'];
+const FINAL_STATUSES = ['Approved Reform', 'Rejected Non-reform', 'Consolidated', 'Pending'];
+const COUNTRIES = [
+  { code: 'KHM', name: 'Cambodia', short: 'Cambodia' },
+  { code: 'SLE', name: 'Sierra Leone', short: 'Sierra Leone' },
+  { code: 'JAM', name: 'Jamaica', short: 'Jamaica' },
+  { code: 'COD', name: 'Democratic Republic of the Congo', short: 'DRC' },
+];
+const CRITERIA = [
+  ['C1', 'Explicit commitment'],
+  ['C2', 'Discrete actionable mechanism'],
+  ['C3', 'System change'],
+  ['C4', 'Not merely implementation'],
+  ['C5', 'Distinct reform action'],
+  ['C6', 'Trackable and monitorable'],
+];
 
-interface CandidateReviewItem {
-  review_id: number;
-  candidate_id: string;
-  reviewer_id: string;
-  reviewer_name: string;
-  inclusion_decision: string;
-  comment: string | null;
-  created_at: string;
-}
-
-function formatRelativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
-function getDecisionBadgeClass(decision: string): string {
-  switch (decision) {
-    case 'Accept': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    case 'Reject': return 'bg-red-100 text-red-800 border-red-200';
-    case 'Needs Discussion': return 'bg-amber-100 text-amber-800 border-amber-200';
-    default: return 'bg-slate-100 text-slate-700 border-slate-200';
+type AnyRecord = Record<string, any>;
+const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
+const val = (obj: AnyRecord | null | undefined, ...keys: string[]) => {
+  for (const key of keys) if (obj?.[key] !== undefined && obj?.[key] !== null && obj[key] !== '') return obj[key];
+  return '';
+};
+const text = (v: unknown) => v === null || v === undefined || v === '' ? 'Not provided' : String(v);
+const getCandidateId = (c: AnyRecord) => val(c, 'candidate_id', 'Candidate_ID', 'id');
+const getStream = (c: AnyRecord) => val(c, 'effective_stream', 'stream', 'Candidate_Stream_Label') || val(c?.current_assessment, 'effective_stream') || val(c, 'candidate_stream', 'Candidate_Stream');
+const getBaselineStream = (c: AnyRecord) => val(c?.baseline, 'candidate_stream', 'Candidate_Stream') || val(c, 'baseline_stream', 'Baseline_Stream', 'candidate_stream', 'Candidate_Stream');
+const getCountry = (c: AnyRecord) => val(c, 'country', 'country_name', 'Country');
+const countryCode = (c: AnyRecord) => val(c, 'country_code', 'Country_Code') || COUNTRIES.find(x => x.name === getCountry(c) || x.code === getCountry(c))?.code || getCandidateId(c).slice(0, 3);
+const countryFullName = (c: AnyRecord) => getCountry(c) && !COUNTRIES.some(x => x.code === getCountry(c)) ? getCountry(c) : COUNTRIES.find(x => x.code === countryCode(c))?.name || getCountry(c);
+const titleOf = (c: AnyRecord) => val(c, 'reform_action_statement_english', 'standardized_candidate_reform_action', 'Reform_Action_Statement_English', 'candidate_action_english');
+const sourceExcerpt = (c: AnyRecord) => val(c, 'evidence_passage_english_translation', 'Evidence_Passage_English_Translation', 'evidence_passage_original_language', 'Evidence_Passage_Original_Language', 'source_excerpt', 'compact_form', 'Compact_Form');
+const evidenceOf = (d: AnyRecord | null) => val(d, 'evidence', 'linked_evidence', 'candidate_evidence', 'anchors') as AnyRecord[] || [];
+const evidenceOriginal = (e: AnyRecord) => val(e, 'original_quote', 'verbatim_source_text', 'quote_original', 'quote_original_language', 'evidence_passage_original_language', 'Quote_Original_Language', 'Evidence_Passage_Original_Language', 'Original_Quote');
+const evidenceEnglish = (e: AnyRecord) => val(e, 'english_translation', 'translation_english', 'quote_english_translation', 'evidence_passage_english_translation', 'Quote_English_Translation', 'Evidence_Passage_English_Translation', 'English_Translation');
+const evidenceRotation = (e: AnyRecord) => {
+  const rects = val(e, 'rectangles', 'evidence_rectangles') as AnyRecord[] || [];
+  return Number(val(e, 'page_rotation', 'Page_Rotation') || val(rects[0], 'page_rotation', 'Page_Rotation') || 0);
+};
+const streamClass = (s: string) => s === STREAMS[0] ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : s === STREAMS[1] ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-slate-100 text-slate-700 border-slate-200';
+const getCriterion = (c: AnyRecord, n: number) => {
+  const criterionNames = ['explicit_commitment', 'discrete_actionable_mechanism', 'system_change', 'not_merely_implementation', 'distinct_reform_action', 'trackable_monitorable'];
+  const possible = [`c${n}`, `c${n}_${criterionNames[n - 1]}`, `criterion_${n}`, `criterion_c${n}`, `C${n}`, `C${n}_Pass`, `criterion_${n}_pass`];
+  const v = val(c, ...possible);
+  return v === '' ? null : (v === 1 || v === '1' || v === true);
+};
+const arrayText = (v: unknown) => Array.isArray(v) ? v.join(', ') : text(v);
+const tagValues = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : String(v || '').split(';').map(s => s.trim()).filter(Boolean);
+const flattenCandidate = (c: AnyRecord) => {
+  const merged = { ...(c?.baseline || {}), ...c, ...(c?.assessment || {}), ...(c?.effective || {}), ...(c?.current_assessment || {}) };
+  for (const key of ['candidate_id', 'country', 'country_code', 'final_status', 'global_review_decision', 'regional_confirmation_decision', 'review_resolution', 'count_in_final_reform_total', 'six_criteria_pass', 'has_unresolved_disagreement', 'assessment_revision']) {
+    if (c?.[key] !== undefined) merged[key] = c[key];
   }
+  return merged;
+};
+const criteriaPass = (c: AnyRecord) => {
+  const stored = val(c, 'six_criteria_pass', 'Six_Criteria_Pass');
+  if (stored !== '') return stored === 1 || stored === '1' || stored === true;
+  return CRITERIA.every((_, index) => getCriterion(c, index + 1) === true);
+};
+const hasIssue = (c: AnyRecord) => {
+  const flag = val(c, 'has_unresolved_issue', 'unresolved_issue_count');
+  return flag === true || flag === 1 || (typeof flag === 'string' && flag !== '' && flag !== '0' && flag.toLowerCase() !== 'false');
+};
+const isQaSample = (c: AnyRecord) => {
+  const sample = val(c, 'qa_sample', 'QA_Sample', 'qa_status', 'QA_Status');
+  return sample !== '' && sample !== false && sample !== 0 && sample !== '0' && String(sample).toLowerCase() !== 'no';
+};
+const countInFinalTotal = (c: AnyRecord) => {
+  const value = val(c, 'count_in_final_reform_total', 'Count_in_Final_Reform_Total');
+  return value === true || value === 1 || value === '1';
+};
+
+async function readJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText} while loading ${url}`);
+  return response.json() as Promise<T>;
 }
 
 export default function Workspace() {
   const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(useSearch());
-
-  const selectedCandidateId = searchParams.get('id') || null;
-  const [activeAnchorId, setActiveAnchorId] = useState<string | null>(null);
-
-  // Reviewer identity
+  const selectedId = searchParams.get('id');
   const { reviewer, login, logout } = useReviewer();
   const [showReviewerModal, setShowReviewerModal] = useState(!reviewer);
+  const [allCandidates, setAllCandidates] = useState<AnyRecord[]>([]);
+  const [detail, setDetail] = useState<AnyRecord | null>(null);
+  const [stats, setStats] = useState<AnyRecord | null>(null);
+  const [datasetId, setDatasetId] = useState('');
+  const [qaChecks, setQaChecks] = useState<AnyRecord[]>([]);
+  const [qaError, setQaError] = useState('');
+  const [relationships, setRelationships] = useState<AnyRecord[]>([]);
+  const [reviews, setReviews] = useState<AnyRecord[]>([]);
+  const [document, setDocument] = useState<AnyRecord | null>(null);
+  const [activeEvidenceId, setActiveEvidenceId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [view, setView] = useState('All candidates');
+  const [filters, setFilters] = useState<Record<string, string>>({ country: 'All', stream: 'All', pillar: 'All', tier1: 'All', tier2: 'All', solution: 'All', financing: 'All', temporal: 'All', cluster: 'All', global: 'All', regional: 'All', final: 'All', criterion: 'All', issue: 'All' });
+  const [showFilters, setShowFilters] = useState(false);
+  const [tab, setTab] = useState('Action');
+  const [exportMessage, setExportMessage] = useState('');
 
-  // Review state
-  const [candidateReviews, setCandidateReviews] = useState<CandidateReviewItem[]>([]);
-  const [reviewsConflict, setReviewsConflict] = useState(false);
-  const [myDecision, setMyDecision] = useState('');
-  const [myRationale, setMyRationale] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-
-  // Filters State
-  const [filters, setFilters] = useState({
-    country: 'All',
-    stream: 'All',
-    inclusion_decision: 'All',
-    confidence_level: 'All',
-    anchor_confidence: 'All',
-    reform_aspiration_status: 'All',
-    reform_type_tier_1: 'All',
-    human_review_status: 'All',
-    search: '',
-  });
-
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-
-  // Debounced search
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(filters.search), 300);
-    return () => clearTimeout(t);
-  }, [filters.search]);
+    let alive = true;
+    setLoading(true);
+    let qaLoadError = '';
+    Promise.all([
+      readJson<any>('/api/candidates?limit=500'),
+      readJson<any>('/api/stats').catch(() => null),
+      readJson<any>('/api/qa-checks').catch(e => { qaLoadError = e.message || 'Unable to load QA checks'; return []; }),
+    ]).then(([candidateResponse, statsResponse, qaResponse]) => {
+      if (!alive) return;
+      const candidateRows = Array.isArray(candidateResponse) ? candidateResponse : candidateResponse?.candidates ?? candidateResponse?.items ?? [];
+      setAllCandidates(candidateRows.map(flattenCandidate));
+      setStats(statsResponse);
+      setDatasetId(candidateResponse?.dataset_id || '');
+      setQaChecks(Array.isArray(qaResponse) ? qaResponse : []);
+      setQaError(qaLoadError);
+      setError('');
+    }).catch(e => alive && setError(e.message || 'Unable to load candidates'))
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, []);
 
-  // Query Params for API
-  const queryParams = {
-    ...(filters.country !== 'All' && { country: filters.country }),
-    ...(filters.stream !== 'All' && { stream: filters.stream }),
-    ...(filters.inclusion_decision !== 'All' && { inclusion_decision: filters.inclusion_decision }),
-    ...(filters.confidence_level !== 'All' && { confidence_level: filters.confidence_level }),
-    ...(filters.anchor_confidence !== 'All' && { anchor_confidence: filters.anchor_confidence }),
-    ...(filters.reform_aspiration_status !== 'All' && { reform_aspiration_status: filters.reform_aspiration_status }),
-    ...(filters.reform_type_tier_1 !== 'All' && { reform_type_tier_1: filters.reform_type_tier_1 }),
-    ...(filters.human_review_status !== 'All' && { human_review_status: filters.human_review_status }),
-    ...(debouncedSearch && { search: debouncedSearch }),
-    limit: 500,
-  };
+  const qaCandidateIds = useMemo(() => new Set(qaChecks
+    .map(check => String(val(check, 'candidate_id', 'Candidate_ID', 'candidateId')))
+    .filter(Boolean)), [qaChecks]);
 
-  // Queries
-  const { data: stats } = useGetStats({ query: { queryKey: ['/api/stats'] } });
-  const { data: candidatesData, isLoading: candidatesLoading } = useListCandidates(queryParams, {
-    query: { queryKey: ['/api/candidates', queryParams] }
-  });
-
-  const { data: candidateDetail, isLoading: detailLoading } = useGetCandidate(
-    selectedCandidateId || '',
-    { query: { enabled: !!selectedCandidateId, queryKey: ['/api/candidates', selectedCandidateId] } }
-  );
-
-  const { data: relationships } = useListRelationships(
-    { candidateId: selectedCandidateId || undefined },
-    { query: { enabled: !!selectedCandidateId, queryKey: ['/api/relationships', selectedCandidateId] } }
-  );
-
-  const candidates = candidatesData?.candidates || [];
-
-  // Auto-select first item on load if none selected
-  useEffect(() => {
-    if (!selectedCandidateId && candidates.length > 0) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('id', candidates[0].candidate_id);
-      setLocation(`${location}?${url.searchParams.toString()}`);
-    }
-  }, [candidates, selectedCandidateId, location, setLocation]);
-
-  // Set active anchor when candidate changes
-  useEffect(() => {
-    if (candidateDetail?.anchors?.length) {
-      const primary = candidateDetail.anchors.find(a => a.anchor_role === 'Primary Evidence');
-      setActiveAnchorId(primary?.anchor_id || candidateDetail.anchors[0].anchor_id);
-    } else {
-      setActiveAnchorId(null);
-    }
-  }, [candidateDetail]);
-
-  // Fetch reviews when candidate or reviewer changes
-  const fetchReviews = useCallback(async (candidateId: string) => {
-    try {
-      const data = await fetch(`/api/candidates/${candidateId}/reviews`).then(r => r.json()) as {
-        reviews: CandidateReviewItem[];
-        has_conflict: boolean;
-      };
-      setCandidateReviews(data.reviews || []);
-      setReviewsConflict(data.has_conflict);
-      // Pre-fill with my latest decision
-      if (reviewer) {
-        const myReview = (data.reviews || []).find(r => r.reviewer_id === reviewer.reviewer_id);
-        if (myReview) {
-          setMyDecision(myReview.inclusion_decision);
-          setMyRationale(myReview.comment || '');
-        } else {
-          setMyDecision('');
-          setMyRationale('');
-        }
+  const candidates = useMemo(() => {
+    const normalized = search.trim().toLocaleLowerCase();
+    return allCandidates.filter(c => {
+      const id = getCandidateId(c);
+      const stream = getStream(c);
+      const country = getCountry(c);
+      if (view === 'Review actions' && stream === STREAMS[2]) return false;
+      if (view === 'Final approved reforms' && !countInFinalTotal(c)) return false;
+      if (view === 'QA sample' && !(qaCandidateIds.has(String(id)) || (!datasetId && isQaSample(c)))) return false;
+      if (filters.country !== 'All' && countryCode(c) !== filters.country && country !== filters.country) return false;
+      if (filters.stream !== 'All' && stream !== filters.stream) return false;
+      if (filters.pillar !== 'All' && val(c, 'primary_pillar', 'water_security_pillar', 'Primary_Pillar') !== filters.pillar) return false;
+      if (filters.tier1 !== 'All' && val(c, 'primary_tier1_reform_domain', 'reform_domain_tier_1', 'reform_type_tier_1', 'Primary_Tier1_Reform_Domain') !== filters.tier1) return false;
+      if (filters.tier2 !== 'All' && val(c, 'tier2_reform_category', 'reform_domain_tier_2', 'reform_type_tier_2', 'Tier2_Reform_Category') !== filters.tier2) return false;
+      if (filters.solution !== 'All' && ![val(c, 'primary_scalable_solution', 'Primary_Scalable_Solution'), ...tagValues(val(c, 'additional_scalable_solutions', 'Additional_Scalable_Solutions'))].includes(filters.solution)) return false;
+      if (filters.financing !== 'All' && String(val(c, 'water_financing_relevance', 'financing_relevance', 'Water_Financing_Relevance', 'Financing_Relevance')) !== filters.financing) return false;
+      if (filters.temporal !== 'All' && val(c, 'temporal_status', 'Temporal_Status') !== filters.temporal) return false;
+      if (filters.cluster !== 'All' && val(c, 'cluster_role', 'Cluster_Role') !== filters.cluster) return false;
+      if (filters.global !== 'All' && (val(c, 'global_review_decision', 'Global_Review_Decision') || 'Pending') !== filters.global) return false;
+      if (filters.regional !== 'All' && (val(c, 'regional_confirmation_decision', 'Regional_Confirmation_Decision') || 'Pending') !== filters.regional) return false;
+      if (filters.final !== 'All' && (val(c, 'final_status', 'Final_Status') || 'Pending') !== filters.final) return false;
+      if (filters.criterion !== 'All') {
+        const criterionNumber = Number(filters.criterion.slice(1));
+        if (getCriterion(c, criterionNumber) !== false) return false;
       }
-    } catch (err) {
-      console.error('Failed to fetch reviews:', err);
+      if (filters.issue === 'Yes' && !hasIssue(c)) return false;
+      if (filters.issue === 'No' && hasIssue(c)) return false;
+      if (normalized) {
+        const searchable = [id, titleOf(c), sourceExcerpt(c), val(c, 'reform_action_text_original_language', 'reform_action_statement_original', 'original_compact_text'), val(c, 'reform_action_text_english_translation', 'reform_action_statement_english'), val(c, 'lead_institution_actor', 'responsible_actor', 'responsible_entity'), val(c, 'llm_decision_rationale', 'decision_rationale', 'rationale'), val(c, 'primary_pillar', 'water_security_pillar'), val(c, 'primary_tier1_reform_domain', 'reform_domain_tier_1', 'reform_type_tier_1'), val(c, 'tier2_reform_category', 'reform_domain_tier_2'), val(c, 'secondary_reform_domain_tags', 'Secondary_Reform_Domain_Tags'), val(c, 'primary_scalable_solution', 'Primary_Scalable_Solution'), val(c, 'additional_scalable_solutions', 'Additional_Scalable_Solutions'), val(c, 'evidence_text', 'evidence_search_text'), country].join(' ').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase();
+        const needle = normalized.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+        if (!searchable.includes(needle)) return false;
+      }
+      return true;
+    });
+  }, [allCandidates, datasetId, filters, qaCandidateIds, search, view]);
+  const countryOptions = useMemo(() => {
+    const observed = new Map<string, string>();
+    for (const candidate of allCandidates) {
+      const code = countryCode(candidate);
+      if (code) observed.set(code, code === 'COD' ? 'DRC' : COUNTRIES.find(c => c.code === code)?.short || getCountry(candidate) || code);
     }
-  }, [reviewer]);
+    return [...observed.entries()];
+  }, [allCandidates]);
 
   useEffect(() => {
-    if (!selectedCandidateId) return;
-    setCandidateReviews([]);
-    setReviewsConflict(false);
-    setMyDecision('');
-    setMyRationale('');
-    setSubmitSuccess(false);
-    fetchReviews(selectedCandidateId);
-  }, [selectedCandidateId, fetchReviews]);
-
-  const submitReview = async () => {
-    if (!myDecision || !reviewer || !selectedCandidateId || submitting) return;
-    setSubmitting(true);
-    setSubmitSuccess(false);
-    try {
-      const resp = await fetch(`/api/candidates/${selectedCandidateId}/reviews`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${reviewer.token}`,
-        },
-        body: JSON.stringify({
-          inclusion_decision: myDecision,
-          comment: myRationale.trim() || null,
-        }),
-      });
-      if (!resp.ok) throw new Error('Failed to submit review');
-      setSubmitSuccess(true);
-      await fetchReviews(selectedCandidateId);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSubmitting(false);
+    if (!selectedId && candidates.length) {
+      const params = new URLSearchParams(searchParams);
+      params.set('id', getCandidateId(candidates[0]));
+      setLocation(`${location}?${params.toString()}`);
     }
+  }, [candidates, selectedId, location, searchParams, setLocation]);
+
+  useEffect(() => {
+    if (!selectedId) { setDetail(null); setReviews([]); setRelationships([]); setDocument(null); return; }
+    let alive = true;
+    setDetailLoading(true);
+    setDetail(null);
+    setDocument(null);
+    setReviews([]);
+    setRelationships([]);
+    setActiveEvidenceId('');
+    readJson<any>(`/api/candidates/${encodeURIComponent(selectedId)}`).then(d => {
+      if (!alive) return;
+      const candidateDetail = flattenCandidate(d?.candidate ?? d?.detail ?? d);
+      setDetail(candidateDetail);
+      setReviews(Array.isArray(candidateDetail.review_events) ? candidateDetail.review_events : Array.isArray(candidateDetail.reviews) ? candidateDetail.reviews : Array.isArray(candidateDetail.events) ? candidateDetail.events : []);
+      setRelationships(Array.isArray(candidateDetail.relationships) ? candidateDetail.relationships : []);
+      const evidence = evidenceOf(candidateDetail);
+       const first = evidence.find((e: AnyRecord) => /canonical action/i.test(val(e, 'link_role', 'evidence_role', 'Evidence_Role', 'anchor_role', 'role'))) || evidence[0];
+      setActiveEvidenceId(first ? String(val(first, 'evidence_id', 'anchor_id', 'id')) : '');
+      setError('');
+    }).catch(e => alive && setError(e.message || 'Unable to load candidate details'))
+      .finally(() => alive && setDetailLoading(false));
+    return () => { alive = false; };
+  }, [selectedId]);
+
+  const evidence = evidenceOf(detail);
+  const activeEvidence = evidence.find((e: AnyRecord) => String(val(e, 'evidence_id', 'anchor_id', 'id')) === activeEvidenceId);
+  const docId = val(activeEvidence, 'document_id', 'Document_ID');
+  useEffect(() => {
+    if (!docId) { setDocument(null); return; }
+    let alive = true;
+    setDocument(null);
+    readJson<any>(`/api/documents/${encodeURIComponent(docId)}`).then(d => alive && setDocument(d?.document ?? d))
+      .catch(e => alive && setError(e.message || 'Unable to load source document'));
+    return () => { alive = false; };
+  }, [docId]);
+
+  const selectCandidate = (id: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('id', id);
+    setLocation(`${location}?${params.toString()}`);
+  };
+  const selectedIndex = candidates.findIndex(c => getCandidateId(c) === selectedId);
+  const moveSelection = (delta: number) => {
+    const next = candidates[selectedIndex + delta];
+    if (next) selectCandidate(getCandidateId(next));
+  };
+  const distinct = (keys: string[]) => [...new Set(allCandidates.map(c => String(val(c, ...keys))).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  const exportItems = [
+    ['Master candidate CSV', '/api/export/master.csv'],
+    ['Final approved CSV', '/api/export/final-approved.csv'],
+    ['Review history CSV', '/api/export/review-history.csv'],
+    ['Evidence & provenance CSV', '/api/export/evidence.csv'],
+  ];
+  const exportData = (url: string) => {
+    setExportMessage('Preparing export…');
+    fetch(url).then(async response => {
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = downloadUrl;
+      const serverFilename = response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/i)?.[1];
+      a.download = serverFilename || url.split('/').pop() || 'export.csv';
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+      setExportMessage('Export downloaded');
+    }).catch(e => setExportMessage(`Export unavailable: ${e.message}`));
   };
 
-  const activeAnchor = candidateDetail?.anchors?.find(a => a.anchor_id === activeAnchorId);
+  const currentDecision = val(detail, 'global_review_decision', 'Global_Review_Decision') || 'Pending';
+  const regionalDecision = val(detail, 'regional_confirmation_decision', 'Regional_Confirmation_Decision') || 'Pending';
+  const candidateQaChecks = detail ? qaChecks.filter(check => String(val(check, 'candidate_id', 'Candidate_ID', 'candidateId')) === String(getCandidateId(detail))) : [];
 
-  // Document query for active anchor
-  const { data: document } = useGetDocument(
-    activeAnchor?.document_id || '',
-    { query: { enabled: !!activeAnchor?.document_id, queryKey: ['/api/documents', activeAnchor?.document_id] } }
-  );
-
-  // Candidate Navigation
-  const selectedIndex = candidates.findIndex(c => c.candidate_id === selectedCandidateId);
-  const handleNext = () => {
-    if (selectedIndex < candidates.length - 1) {
-      const nextId = candidates[selectedIndex + 1].candidate_id;
-      const url = new URL(window.location.href);
-      url.searchParams.set('id', nextId);
-      setLocation(`${location}?${url.searchParams.toString()}`);
-    }
-  };
-  const handlePrev = () => {
-    if (selectedIndex > 0) {
-      const prevId = candidates[selectedIndex - 1].candidate_id;
-      const url = new URL(window.location.href);
-      url.searchParams.set('id', prevId);
-      setLocation(`${location}?${url.searchParams.toString()}`);
-    }
-  };
-
-  const getStreamColor = (stream: string) => {
-    if (stream.startsWith('A')) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    if (stream.startsWith('B')) return 'bg-amber-100 text-amber-800 border-amber-200';
-    if (stream.startsWith('C')) return 'bg-slate-100 text-slate-800 border-slate-200';
-    return 'bg-gray-100 text-gray-800';
-  };
-
-  const reviewedCount = candidates.filter(c => (c as any).review_count > 0).length;
-
-  // Build the CSV export URL from the current active filters (no limit/page).
-  const exportCsv = () => {
-    const p = new URLSearchParams();
-    if (filters.country !== 'All') p.set('country', filters.country);
-    if (filters.stream !== 'All') p.set('stream', filters.stream);
-    if (filters.inclusion_decision !== 'All') p.set('inclusion_decision', filters.inclusion_decision);
-    if (filters.confidence_level !== 'All') p.set('confidence_level', filters.confidence_level);
-    if (filters.anchor_confidence !== 'All') p.set('anchor_confidence', filters.anchor_confidence);
-    if (filters.reform_aspiration_status !== 'All') p.set('reform_aspiration_status', filters.reform_aspiration_status);
-    if (filters.reform_type_tier_1 !== 'All') p.set('reform_type_tier_1', filters.reform_type_tier_1);
-    if (filters.human_review_status !== 'All') p.set('human_review_status', filters.human_review_status);
-    if (debouncedSearch) p.set('search', debouncedSearch);
-    const qs = p.toString();
-    window.open(`/api/export/decisions.csv${qs ? `?${qs}` : ''}`, '_blank');
-  };
-
-  return (
-    <div className="flex flex-col h-[100dvh] w-full bg-background overflow-hidden font-sans">
-      {/* Reviewer Modal */}
-      {showReviewerModal && (
-        <ReviewerModal
-          onLogin={(identity) => {
-            login(identity);
-            setShowReviewerModal(false);
-          }}
-        />
-      )}
-
-      {/* Header */}
-      <header className="flex-none h-12 border-b bg-card flex items-center justify-between px-4 gap-3">
-        <div className="flex items-center gap-3 flex-none">
-          <FileSignature className="w-5 h-5 text-primary" />
-          <h1 className="font-semibold text-sm">Water Compact Review</h1>
-          <Badge variant="secondary" className="text-[10px] uppercase font-mono px-1.5 py-0">Prototype</Badge>
-        </div>
-
-        <div className="text-xs text-muted-foreground font-mono hidden md:block">
-          {stats
-            ? `${stats.total_candidates} candidates · ${stats.total_anchors} anchors · ${stats.total_documents} documents${reviewedCount > 0 ? ` · ${reviewedCount} reviewed` : ''}`
-            : 'Loading…'}
-        </div>
-
-        <div className="flex items-center gap-4 flex-none">
-          {/* Export CSV button */}
-          <button
-            onClick={exportCsv}
-            title="Download all reviewer decisions as CSV"
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md px-2.5 py-1 hover:bg-slate-50 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Export CSV</span>
-          </button>
-
-          {/* Reviewer chip */}
-          {reviewer ? (
-            <div className="flex items-center gap-1.5 text-xs border border-border rounded-full px-2.5 py-1 bg-slate-50">
-              <User className="w-3.5 h-3.5 text-slate-500" />
-              <span className="font-medium text-slate-700 max-w-[120px] truncate">{reviewer.display_name}</span>
-              <button
-                onClick={() => { logout(); setShowReviewerModal(true); }}
-                className="text-slate-400 hover:text-slate-600 ml-0.5 text-[10px] underline underline-offset-1"
-              >
-                Switch
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowReviewerModal(true)}
-              className="text-xs text-primary hover:underline font-medium flex items-center gap-1"
-            >
-              <User className="w-3.5 h-3.5" />
-              Sign in to review
-            </button>
-          )}
-
-          <div className="flex gap-4 text-xs font-medium">
-            <a href="#" className="flex items-center gap-1 hover:text-primary transition-colors text-muted-foreground">
-              Cambodia <ExternalLink className="w-3 h-3" />
-            </a>
-            <a href="#" className="flex items-center gap-1 hover:text-primary transition-colors text-muted-foreground">
-              Sierra Leone <ExternalLink className="w-3 h-3" />
-            </a>
-            <a href="#" className="flex items-center gap-1 hover:text-primary transition-colors text-muted-foreground">
-              Jamaica <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Workspace */}
-      <div className="flex-1 h-[calc(100vh-3rem)]">
-        <PanelGroup direction="horizontal">
-
-          {/* Left Panel: List */}
-          <Panel defaultSize={25} minSize={20} maxSize={35} className="flex flex-col bg-card relative">
-            <div className="flex-none p-3 border-b border-border space-y-3 bg-muted/20">
-
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Showing {candidates.length} of {stats?.total_candidates || '?'}
-                </span>
-                <div className="flex gap-1 items-center">
-                  <button onClick={handlePrev} disabled={selectedIndex <= 0} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
-                  <span className="text-xs font-mono text-muted-foreground w-16 text-center">
-                    {candidates.length > 0 ? selectedIndex + 1 : 0} / {candidates.length}
-                  </span>
-                  <button onClick={handleNext} disabled={selectedIndex >= candidates.length - 1} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
-                </div>
-              </div>
-
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                <Input
-                  placeholder="Search actions, IDs..."
-                  className="pl-8 h-9 text-xs"
-                  value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <Select value={filters.country} onValueChange={(v) => setFilters({ ...filters, country: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Country" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Countries</SelectItem>
-                    <SelectItem value="Cambodia">Cambodia</SelectItem>
-                    <SelectItem value="Sierra Leone">Sierra Leone</SelectItem>
-                    <SelectItem value="Jamaica">Jamaica</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={filters.stream} onValueChange={(v) => setFilters({ ...filters, stream: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Stream" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Streams</SelectItem>
-                    <SelectItem value="A">Stream A</SelectItem>
-                    <SelectItem value="B">Stream B</SelectItem>
-                    <SelectItem value="C">Stream C</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={filters.inclusion_decision} onValueChange={(v) => setFilters({ ...filters, inclusion_decision: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Inclusion" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Decisions</SelectItem>
-                    <SelectItem value="Provisionally Included">Provisionally Included</SelectItem>
-                    <SelectItem value="Excluded by LLM">Excluded by LLM</SelectItem>
-                    <SelectItem value="Consolidated">Consolidated</SelectItem>
-                    <SelectItem value="Pending Human Review">Pending Human Review</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={filters.confidence_level} onValueChange={(v) => setFilters({ ...filters, confidence_level: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Confidence" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Conf.</SelectItem>
-                    <SelectItem value="High">High</SelectItem>
-                    <SelectItem value="Medium">Medium</SelectItem>
-                    <SelectItem value="Low">Low</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {showAdvancedFilters && (
-                <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-border">
-                  <Select value={filters.anchor_confidence} onValueChange={(v) => setFilters({ ...filters, anchor_confidence: v })}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Anchor Conf" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Anchor Conf</SelectItem>
-                      <SelectItem value="High">High</SelectItem>
-                      <SelectItem value="Medium">Medium</SelectItem>
-                      <SelectItem value="Low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={filters.human_review_status} onValueChange={(v) => setFilters({ ...filters, human_review_status: v })}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Review Status" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Review Status</SelectItem>
-                      <SelectItem value="Pending human review">Pending Human Review</SelectItem>
-                      <SelectItem value="Reviewed">Reviewed</SelectItem>
-                      <SelectItem value="Needs Revision">Needs Revision</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={filters.reform_aspiration_status} onValueChange={(v) => setFilters({ ...filters, reform_aspiration_status: v })}>
-                    <SelectTrigger className="h-8 text-xs col-span-2"><SelectValue placeholder="Aspiration Status" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Aspiration Statuses</SelectItem>
-                      <SelectItem value="Is an aspiration">Is an aspiration</SelectItem>
-                      <SelectItem value="Not an aspiration">Not an aspiration</SelectItem>
-                      <SelectItem value="Has explicit mechanism">Has explicit mechanism</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={filters.reform_type_tier_1} onValueChange={(v) => setFilters({ ...filters, reform_type_tier_1: v })}>
-                    <SelectTrigger className="h-8 text-xs col-span-2"><SelectValue placeholder="Tier 1 Reform Type" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="All">All Tier 1 Types</SelectItem>
-                      <SelectItem value="Governance">Governance</SelectItem>
-                      <SelectItem value="Infrastructure">Infrastructure</SelectItem>
-                      <SelectItem value="Financing">Financing</SelectItem>
-                      <SelectItem value="Policy">Policy</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              <button
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className="w-full text-center text-[10px] uppercase font-bold text-muted-foreground flex items-center justify-center gap-1 hover:text-primary transition-colors"
-              >
-                <Filter className="w-3 h-3" />
-                {showAdvancedFilters ? 'Hide Advanced Filters' : 'Show Advanced Filters'}
-              </button>
-            </div>
-
-            <ScrollArea className="flex-1">
-              <div className="flex flex-col">
-                {candidatesLoading ? (
-                  <div className="p-4 text-sm text-muted-foreground text-center">Loading candidates…</div>
-                ) : candidates.length === 0 ? (
-                  <div className="p-4 text-sm text-muted-foreground text-center">No matching candidates</div>
-                ) : (
-                  candidates.map((c) => {
-                    const isSelected = c.candidate_id === selectedCandidateId;
-                    const hasConflict = (c as any).has_conflict === true;
-                    const reviewCount = (c as any).review_count ?? 0;
-                    return (
-                      <div
-                        key={c.candidate_id}
-                        onClick={() => {
-                          const url = new URL(window.location.href);
-                          url.searchParams.set('id', c.candidate_id);
-                          setLocation(`${location}?${url.searchParams.toString()}`);
-                        }}
-                        className={cn(
-                          "p-3 border-b border-border cursor-pointer transition-colors hover:bg-slate-50 group",
-                          isSelected ? "bg-slate-100 border-l-2 border-l-primary" : "border-l-2 border-l-transparent"
-                        )}
-                      >
-                        <div className="flex justify-between items-start mb-1.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-xs font-semibold text-slate-700">{c.candidate_id}</span>
-                            <Badge variant="outline" className="text-[10px] px-1 h-4">{c.country.substring(0, 3).toUpperCase()}</Badge>
-                            {hasConflict && (
-                              <AlertTriangle className="w-3 h-3 text-amber-500" aria-label="Reviewers disagree" />
-                            )}
-                            {!hasConflict && reviewCount > 0 && (
-                              <CheckCircle2 className="w-3 h-3 text-emerald-500" aria-label={`${reviewCount} review(s)`} />
-                            )}
-                          </div>
-                          <Badge variant="outline" className={cn("text-[10px] px-1 h-4 font-mono", getStreamColor(c.candidate_stream))}>
-                            Str {c.candidate_stream.charAt(0)}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-foreground line-clamp-2 leading-relaxed mb-2 font-medium">
-                          {c.standardized_candidate_reform_action}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-[9px] px-1 h-3.5 bg-slate-200/50">
-                            {c.inclusion_decision}
-                          </Badge>
-                          {c.confidence_level === 'High' && <span className="text-[9px] text-emerald-600 font-medium">High Conf.</span>}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </ScrollArea>
-          </Panel>
-
-          <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors flex items-center justify-center cursor-col-resize z-20">
-            <div className="h-6 w-0.5 bg-slate-300 rounded-full" />
-          </PanelResizeHandle>
-
-          {/* Center Panel: PDF Viewer */}
-          <Panel defaultSize={45} minSize={30} className="flex flex-col bg-slate-100 relative">
-            {candidateDetail && candidateDetail.anchors?.length > 0 ? (
-              <>
-                <div className="flex-none p-2 border-b border-border bg-white flex items-center overflow-x-auto gap-2 shadow-sm z-10">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider ml-1 mr-2">Evidence</span>
-                  {candidateDetail.anchors.map(anchor => {
-                    const isActive = anchor.anchor_id === activeAnchorId;
-                    return (
-                      <button
-                        key={anchor.anchor_id}
-                        onClick={() => setActiveAnchorId(anchor.anchor_id)}
-                        className={cn(
-                          "px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all border",
-                          isActive
-                            ? "bg-slate-800 text-white border-slate-800 shadow-sm"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                        )}
-                      >
-                        {anchor.anchor_role}
-                        {anchor.matched_page && <span className="ml-1.5 opacity-60 font-mono text-[10px]">p.{anchor.matched_page}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="flex-1 relative overflow-hidden flex flex-col">
-                  {document && activeAnchor ? (
-                    <PdfViewer
-                      documentId={document.document_id}
-                      documentSha256={document.sha256}
-                      matchedPage={activeAnchor.matched_page}
-                      rectangles={activeAnchor.rectangles}
-                      anchorRole={activeAnchor.anchor_role}
-                    />
-                  ) : (
-                    <div className="flex-1 flex items-center justify-center text-sm text-slate-500">
-                      Loading document…
-                    </div>
-                  )}
-
-                  {/* Verbatim quote block */}
-                  {activeAnchor && (
-                    <div className="flex-none bg-white border-t border-border p-4 max-h-[30vh] overflow-y-auto shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)]">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Extracted Source Text</span>
-                        <Badge variant="outline" className="font-mono text-[10px]">Conf: {activeAnchor.anchor_confidence}</Badge>
-                      </div>
-                      <blockquote className="text-sm font-serif italic text-slate-700 border-l-4 border-amber-300 pl-4 py-1 leading-relaxed">
-                        "{activeAnchor.verbatim_source_text}"
-                      </blockquote>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-slate-400 text-sm bg-slate-50">
-                <div className="text-center">
-                  <FileText className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                  <p>No document anchors found for this candidate.</p>
-                </div>
-              </div>
-            )}
-          </Panel>
-
-          <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors flex items-center justify-center cursor-col-resize z-20">
-            <div className="h-6 w-0.5 bg-slate-300 rounded-full" />
-          </PanelResizeHandle>
-
-          {/* Right Panel: Data Details */}
-          <Panel defaultSize={30} minSize={25} className="flex flex-col bg-card">
-            {detailLoading ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">Loading details…</div>
-            ) : candidateDetail ? (
-              <>
-                <div className="flex-none p-5 border-b border-border bg-slate-50/50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xl font-mono font-bold tracking-tight text-slate-900">
-                      {candidateDetail.candidate_id}
-                    </span>
-                    <Badge variant="outline" className="bg-white">{candidateDetail.country}</Badge>
-                    <Badge variant="outline" className={cn("bg-white font-mono", getStreamColor(candidateDetail.candidate_stream))}>
-                      Stream {candidateDetail.candidate_stream.charAt(0)}
-                    </Badge>
-                    {reviewsConflict && (
-                      <Badge variant="outline" className="bg-amber-50 border-amber-300 text-amber-700 text-[10px]">
-                        <AlertTriangle className="w-3 h-3 mr-1" /> Conflict
-                      </Badge>
-                    )}
-                  </div>
-                  <h2 className="text-[15px] font-semibold text-slate-900 leading-snug">
-                    {candidateDetail.standardized_candidate_reform_action}
-                  </h2>
-                </div>
-
-                <ScrollArea className="flex-1 p-5">
-                  <div className="space-y-6 pb-10">
-
-                    {candidateDetail.final_validated_action && (
-                      <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
-                        <div className="flex items-center gap-2 text-emerald-800 font-semibold mb-1 text-sm uppercase tracking-wide">
-                          <CheckCircle2 className="w-4 h-4" /> Final Validated Action
-                        </div>
-                        <p className="text-sm text-emerald-900 font-medium">
-                          {candidateDetail.final_validated_action}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* ── Methodology Decisions ── */}
-                    <section className="space-y-4">
-                      <div className="flex items-center justify-between border-b border-border pb-1">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Methodology Decisions</h3>
-                        <span className="text-[9px] text-slate-400 font-mono">LLM-GENERATED</span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-                        <div>
-                          <label className="text-[10px] font-semibold uppercase text-slate-500 mb-1 block">Inclusion Decision</label>
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              "text-xs px-2 py-0.5 rounded-sm w-full justify-center",
-                              candidateDetail.inclusion_decision === 'Provisionally Included' && "bg-emerald-100 text-emerald-800",
-                              candidateDetail.inclusion_decision === 'Excluded by LLM' && "bg-red-100 text-red-800",
-                            )}
-                          >
-                            {candidateDetail.inclusion_decision}
-                          </Badge>
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-semibold uppercase text-slate-500 mb-1 block">Action Tag</label>
-                          <Badge variant="outline" className="text-xs px-2 py-0.5 rounded-sm w-full justify-center bg-slate-50">
-                            {candidateDetail.reform_action_tag}
-                          </Badge>
-                        </div>
-
-                        <div className="col-span-2">
-                          <label className="text-[10px] font-semibold uppercase text-slate-500 mb-1 block">Classification Confidence</label>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="font-mono text-xs">{candidateDetail.confidence_level}</Badge>
-                            {candidateDetail.confidence_level === 'High' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                            {candidateDetail.confidence_level === 'Low' && <AlertTriangle className="w-4 h-4 text-amber-500" />}
-                          </div>
-                        </div>
-
-                        <div className="col-span-2">
-                          <label className="text-[10px] font-semibold uppercase text-slate-500 mb-1.5 block">Decision Rationale</label>
-                          <div className="p-3 bg-slate-50 border border-slate-100 rounded-md text-sm text-slate-700 leading-relaxed font-serif">
-                            {candidateDetail.decision_rationale}
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-
-                    {/* ── Domain & Classification ── */}
-                    <section className="space-y-4">
-                      <div className="flex items-center justify-between border-b border-border pb-1">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Domain & Classification</h3>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-[10px] font-semibold uppercase text-slate-500 block">Water Security Pillar</label>
-                          <div className="text-sm font-medium">{candidateDetail.water_security_pillar}</div>
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-semibold uppercase text-slate-500 block">Solution Area</label>
-                          <div className="text-sm font-medium">{candidateDetail.solution_area}</div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-dashed border-border">
-                          <div>
-                            <label className="text-[10px] font-semibold uppercase text-slate-500 block">Tier 1 Reform</label>
-                            <div className="text-sm">{candidateDetail.reform_type_tier_1}</div>
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-semibold uppercase text-slate-500 block">Tier 2 Reform</label>
-                            <div className="text-sm">{candidateDetail.reform_type_tier_2}</div>
-                          </div>
-                        </div>
-                        <div className="pt-2 border-t border-dashed border-border">
-                          <label className="text-[10px] font-semibold uppercase text-slate-500 block">Responsible Entity</label>
-                          <div className="text-sm">{candidateDetail.responsible_entity}</div>
-                        </div>
-                      </div>
-                    </section>
-
-                    {/* ── Aspiration & Assessment ── */}
-                    <section className="space-y-4">
-                      <div className="flex items-center justify-between border-b border-border pb-1">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Aspiration & Assessment</h3>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-[10px] font-semibold uppercase text-slate-500 mb-1 block">Aspiration Status</label>
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              "text-xs font-medium",
-                              candidateDetail.reform_aspiration_status.toLowerCase().includes('aspiration') && "bg-purple-100 text-purple-800"
-                            )}
-                          >
-                            {candidateDetail.reform_aspiration_status}
-                          </Badge>
-                        </div>
-
-                        {candidateDetail.reform_aspiration_status.toLowerCase().includes('aspiration') &&
-                          candidateDetail.anchors?.some(a => ['Aspiration', 'Explicit Mechanism'].includes(a.anchor_role)) && (
-                            <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-md">
-                              <label className="text-[10px] font-semibold uppercase text-slate-500 mb-2 block">Aspiration vs Mechanism Comparison</label>
-                              <div className="space-y-3">
-                                {candidateDetail.anchors.filter(a => a.anchor_role === 'Aspiration').map(a => (
-                                  <div key={a.anchor_id} className="text-sm">
-                                    <span className="text-[10px] uppercase font-bold text-purple-600 block">Aspiration</span>
-                                    <blockquote className="italic border-l-2 border-purple-300 pl-2 mt-1 text-slate-600">{a.verbatim_source_text}</blockquote>
-                                  </div>
-                                ))}
-
-                                {candidateDetail.anchors.some(a => a.anchor_role === 'Aspiration') &&
-                                  candidateDetail.anchors.some(a => a.anchor_role === 'Explicit Mechanism') && (
-                                    <div className="flex justify-center -my-1 relative z-10">
-                                      <Badge variant="outline" className="bg-white text-[9px] uppercase shadow-sm">
-                                        Substantiated By
-                                      </Badge>
-                                    </div>
-                                  )}
-
-                                {candidateDetail.anchors.filter(a => a.anchor_role === 'Explicit Mechanism').map(a => (
-                                  <div key={a.anchor_id} className="text-sm">
-                                    <span className="text-[10px] uppercase font-bold text-emerald-600 block">Mechanism</span>
-                                    <blockquote className="italic border-l-2 border-emerald-300 pl-2 mt-1 text-slate-600">{a.verbatim_source_text}</blockquote>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                        <div>
-                          <label className="text-[10px] font-semibold uppercase text-slate-500 mb-1.5 mt-3 block">Criterion Assessment</label>
-                          <div className="text-sm font-mono bg-slate-900 text-slate-300 p-3 rounded-md overflow-x-auto text-[11px] leading-relaxed">
-                            {candidateDetail.criterion_assessment.split('\n').map((line, i) => (
-                              <div key={i} className="py-0.5">{line}</div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-
-                    {/* ── Relationships ── */}
-                    {relationships && relationships.length > 0 && (
-                      <section className="space-y-4">
-                        <div className="flex items-center justify-between border-b border-border pb-1">
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Relationships</h3>
-                        </div>
-                        <div className="space-y-2">
-                          {relationships.map(rel => (
-                            <div key={rel.relationship_id} className="p-2 border rounded text-xs bg-slate-50 flex items-center justify-between">
-                              <div>
-                                <span className="font-mono text-[10px] text-slate-500 block mb-0.5">{rel.relationship_type}</span>
-                                <span className="font-medium text-primary cursor-pointer hover:underline">
-                                  {rel.target_candidate_id === candidateDetail.candidate_id ? rel.source_candidate_id : rel.target_candidate_id}
-                                </span>
-                              </div>
-                              <Badge variant="outline" className="text-[9px]">{rel.relationship_status}</Badge>
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    )}
-
-                    {/* ── Your Decision ── */}
-                    <section className="space-y-3">
-                      <div className="flex items-center justify-between border-b border-border pb-1">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Your Decision</h3>
-                        {reviewer && (
-                          <span className="text-[9px] text-slate-400 font-mono">as {reviewer.display_name}</span>
-                        )}
-                      </div>
-
-                      {!reviewer ? (
-                        <div className="text-center py-4">
-                          <p className="text-xs text-slate-500 mb-2">Sign in to submit a review decision.</p>
-                          <button
-                            onClick={() => setShowReviewerModal(true)}
-                            className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 mx-auto"
-                          >
-                            <User className="w-3.5 h-3.5" /> Sign in
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {/* Decision radio */}
-                          <div className="grid grid-cols-3 gap-1.5">
-                            {(['Accept', 'Reject', 'Needs Discussion'] as const).map(opt => (
-                              <button
-                                key={opt}
-                                onClick={() => { setMyDecision(opt); setSubmitSuccess(false); }}
-                                className={cn(
-                                  "py-2 rounded-md border text-[11px] font-semibold transition-all",
-                                  myDecision === opt
-                                    ? opt === 'Accept'
-                                      ? 'bg-emerald-600 text-white border-emerald-600'
-                                      : opt === 'Reject'
-                                        ? 'bg-red-600 text-white border-red-600'
-                                        : 'bg-amber-500 text-white border-amber-500'
-                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                                )}
-                              >
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Rationale textarea */}
-                          <textarea
-                            placeholder="Rationale or notes (optional)…"
-                            value={myRationale}
-                            onChange={e => { setMyRationale(e.target.value); setSubmitSuccess(false); }}
-                            rows={3}
-                            className="w-full text-xs border border-slate-200 rounded-md p-2.5 resize-none bg-white focus:outline-none focus:ring-2 focus:ring-slate-800 focus:border-transparent text-slate-700 placeholder:text-slate-400"
-                          />
-
-                          {/* Submit button */}
-                          <button
-                            onClick={submitReview}
-                            disabled={!myDecision || submitting}
-                            className={cn(
-                              "w-full py-2 text-xs font-semibold rounded-md transition-colors disabled:opacity-40",
-                              submitSuccess
-                                ? "bg-emerald-600 text-white"
-                                : "bg-slate-900 hover:bg-slate-700 text-white"
-                            )}
-                          >
-                            {submitting ? 'Saving…' : submitSuccess ? '✓ Saved' : candidateReviews.some(r => r.reviewer_id === reviewer.reviewer_id) ? 'Update Decision' : 'Submit Decision'}
-                          </button>
-                        </div>
-                      )}
-                    </section>
-
-                    {/* ── All Reviewer Decisions ── */}
-                    <section className="space-y-3">
-                      <div className="flex items-center justify-between border-b border-border pb-1">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                          <Users className="w-3.5 h-3.5" /> All Reviewer Decisions
-                        </h3>
-                        <span className="text-[9px] font-mono text-slate-400">
-                          {candidateReviews.length} {candidateReviews.length === 1 ? 'decision' : 'decisions'}
-                        </span>
-                      </div>
-
-                      {reviewsConflict && (
-                        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-md p-3">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 flex-none mt-0.5" />
-                          <div>
-                            <p className="text-xs font-semibold text-amber-800">Reviewers disagree on this candidate</p>
-                            <p className="text-[10px] text-amber-700 mt-0.5">Conflicting decisions are shown below. This candidate may need discussion before finalizing.</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {candidateReviews.length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-4">No decisions submitted yet.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {/* Group: show only latest per reviewer */}
-                          {(() => {
-                            const seen = new Set<string>();
-                            return candidateReviews.filter(r => {
-                              if (seen.has(r.reviewer_id)) return false;
-                              seen.add(r.reviewer_id);
-                              return true;
-                            }).map(review => (
-                              <div key={review.review_id} className="p-3 bg-slate-50 border border-border rounded-md space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center">
-                                      <span className="text-white text-[9px] font-bold">
-                                        {review.reviewer_name.charAt(0).toUpperCase()}
-                                      </span>
-                                    </div>
-                                    <span className="text-xs font-semibold text-slate-800">{review.reviewer_name}</span>
-                                  </div>
-                                  <Badge variant="outline" className={cn("text-[9px] font-semibold", getDecisionBadgeClass(review.inclusion_decision))}>
-                                    {review.inclusion_decision}
-                                  </Badge>
-                                </div>
-                                {review.comment && (
-                                  <p className="text-xs text-slate-600 italic leading-relaxed pl-6.5">
-                                    "{review.comment}"
-                                  </p>
-                                )}
-                                <p className="text-[10px] text-muted-foreground pl-6.5">
-                                  {formatRelativeTime(review.created_at)}
-                                </p>
-                              </div>
-                            ));
-                          })()}
-                        </div>
-                      )}
-                    </section>
-
-                  </div>
-                </ScrollArea>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-                No candidate selected
-              </div>
-            )}
-          </Panel>
-
-        </PanelGroup>
+  return <div className="flex flex-col h-[100dvh] w-full bg-background overflow-hidden font-sans">
+    {showReviewerModal && <ReviewerModal onLogin={identity => { login(identity); setShowReviewerModal(false); }} onViewWithoutReviewer={() => setShowReviewerModal(false)} />}
+    <header className="flex-none min-h-12 border-b bg-card flex items-center justify-between px-4 gap-3">
+      <div className="flex items-center gap-3 flex-none"><FileSignature className="w-5 h-5 text-primary" /><h1 className="font-semibold text-sm">Water Compact Review</h1><Badge variant="secondary" className="text-[10px] uppercase font-mono px-1.5 py-0">{datasetId ? 'v5 · Review workspace' : loading ? 'Loading dataset' : 'Legacy · read-only'}</Badge></div>
+      <div className="text-xs text-muted-foreground font-mono hidden md:block">{allCandidates.length ? `${stats?.total_candidates ?? allCandidates.length} candidates · ${stats?.total_evidence ?? stats?.total_anchors ?? '—'} evidence passages · ${stats?.total_documents ?? '—'} documents` : 'Loading dataset…'}</div>
+      <div className="flex items-center gap-3">
+        <div className="relative group"><button className="flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1.5 hover:bg-muted"><Download className="w-3.5 h-3.5" />Exports</button><div className="hidden group-hover:block focus-within:block absolute right-0 top-full z-50 bg-card border rounded-md shadow-lg p-1 min-w-48">{exportItems.map(([label, url]) => <button key={url} onClick={() => exportData(url)} className="block w-full text-left text-xs px-3 py-2 rounded hover:bg-muted">{label}</button>)}</div></div>
+        {reviewer ? <div className="flex items-center gap-1.5 text-xs border rounded-full px-2.5 py-1 bg-slate-50"><User className="w-3.5 h-3.5 text-slate-500" /><span className="font-medium max-w-[100px] truncate">{reviewer.display_name}</span><span className="text-[9px] text-amber-700 border-l pl-1.5">name selection · unverified</span><button onClick={() => { logout(); setShowReviewerModal(true); }} className="text-slate-400 hover:text-slate-600 ml-1 text-[10px] underline">Switch</button></div> : <button onClick={() => setShowReviewerModal(true)} className="text-xs text-primary hover:underline font-medium">Select reviewer name</button>}
       </div>
+    </header>
+    {exportMessage && <div role="status" className="absolute z-50 top-14 right-4 rounded bg-slate-900 text-white px-3 py-2 text-xs shadow">{exportMessage}<button className="ml-3 underline" onClick={() => setExportMessage('')}>Dismiss</button></div>}
+    {error && <div className="flex-none px-4 py-2 bg-amber-50 text-amber-900 text-xs border-b border-amber-200"><AlertTriangle className="inline w-3.5 h-3.5 mr-1" />{error}</div>}
+    {!datasetId && !loading && allCandidates.length > 0 && <div className="flex-none px-4 py-2 bg-amber-50 text-amber-900 text-xs border-b border-amber-200"><AlertTriangle className="inline w-3.5 h-3.5 mr-1" />Legacy dataset active. This read-only workspace may not have v5 assessments, QA checks, linked evidence, or server-derived final-count data.</div>}
+    {datasetId && qaError && <div className="flex-none px-4 py-2 bg-amber-50 text-amber-900 text-xs border-b border-amber-200"><AlertTriangle className="inline w-3.5 h-3.5 mr-1" />QA checks unavailable: {qaError}</div>}
+    <div className="flex-1 min-h-0">
+      <PanelGroup direction="horizontal">
+        <Panel defaultSize={25} minSize={20} maxSize={35} className="flex flex-col bg-card relative">
+          <div className="flex-none p-3 border-b space-y-3 bg-muted/20">
+            <div className="flex items-center justify-between"><span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{candidates.length} matching · {allCandidates.length} loaded</span><div className="flex items-center gap-1"><button onClick={() => moveSelection(-1)} disabled={selectedIndex <= 0} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button><span className="text-xs font-mono text-muted-foreground w-16 text-center">{selectedIndex >= 0 ? selectedIndex + 1 : 0} / {candidates.length}</span><button onClick={() => moveSelection(1)} disabled={selectedIndex >= candidates.length - 1} className="p-1 rounded hover:bg-slate-200 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button></div></div>
+            <div className="flex gap-1">{['All candidates', 'Review actions', `Final approved (${stats?.count_in_final_reform_total ?? '—'})`, `QA sample (${qaCandidateIds.size})`].map((label, index) => { const views = ['All candidates', 'Review actions', 'Final approved reforms', 'QA sample']; const value = views[index]; return <button key={value} onClick={() => setView(value)} className={cn('flex-1 rounded px-2 py-1.5 text-[10px] font-medium border', view === value ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 hover:bg-slate-50')}>{label}</button>; })}</div>
+            <div className="relative"><Search className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" /><Input aria-label="Search candidates" placeholder="Search IDs, action text, evidence…" className="pl-8 h-9 text-xs" value={search} onChange={e => setSearch(e.target.value)} /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <FilterSelect label="Country" value={filters.country} options={countryOptions.map(([code, name]) => [code, name] as const)} onChange={v => setFilters({ ...filters, country: v })} />
+              <FilterSelect label="Stream" value={filters.stream} options={STREAMS.map(s => [s, s] as const)} onChange={v => setFilters({ ...filters, stream: v })} />
+            </div>
+            {showFilters && <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+              <FilterSelect label="Pillar" value={filters.pillar} options={distinct(['primary_pillar', 'water_security_pillar', 'Primary_Pillar']).map(x => [x, x] as const)} onChange={v => setFilters({ ...filters, pillar: v })} />
+              <FilterSelect label="Tier 1" value={filters.tier1} options={distinct(['primary_tier1_reform_domain', 'reform_domain_tier_1', 'reform_type_tier_1', 'Primary_Tier1_Reform_Domain']).map(x => [x, x] as const)} onChange={v => setFilters({ ...filters, tier1: v, tier2: 'All' })} />
+              <FilterSelect label="Tier 2" value={filters.tier2} options={distinct(['tier2_reform_category', 'reform_domain_tier_2', 'reform_type_tier_2', 'Tier2_Reform_Category']).filter(x => filters.tier1 === 'All' || allCandidates.some(c => val(c, 'primary_tier1_reform_domain', 'reform_domain_tier_1', 'reform_type_tier_1', 'Primary_Tier1_Reform_Domain') === filters.tier1 && val(c, 'tier2_reform_category', 'reform_domain_tier_2', 'reform_type_tier_2', 'Tier2_Reform_Category') === x)).map(x => [x, x] as const)} onChange={v => setFilters({ ...filters, tier2: v })} />
+              <FilterSelect label="Solution" value={filters.solution} options={allCandidates.flatMap(c => [val(c, 'primary_scalable_solution', 'Primary_Scalable_Solution'), ...tagValues(val(c, 'additional_scalable_solutions', 'Additional_Scalable_Solutions'))]).map(s => String(s).trim()).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).sort().map(x => [x, x] as const)} onChange={v => setFilters({ ...filters, solution: v })} />
+              <FilterSelect label="Financing" value={filters.financing} options={distinct(['water_financing_relevance', 'financing_relevance', 'Water_Financing_Relevance', 'Financing_Relevance']).map(x => [x, x] as const)} onChange={v => setFilters({ ...filters, financing: v })} />
+              <FilterSelect label="Temporal" value={filters.temporal} options={distinct(['temporal_status', 'Temporal_Status']).map(x => [x, x] as const)} onChange={v => setFilters({ ...filters, temporal: v })} />
+              <FilterSelect label="Cluster role" value={filters.cluster} options={distinct(['cluster_role', 'Cluster_Role']).map(x => [x, x] as const)} onChange={v => setFilters({ ...filters, cluster: v })} />
+              <FilterSelect label="C1–C6 failure" value={filters.criterion} options={CRITERIA.map(([k]) => [k, `${k} failed`] as const)} onChange={v => setFilters({ ...filters, criterion: v })} />
+              <FilterSelect label="Global decision" value={filters.global} options={['Pending', ...GLOBAL_DECISIONS].map(x => [x, x] as const)} onChange={v => setFilters({ ...filters, global: v })} />
+              <FilterSelect label="Regional decision" value={filters.regional} options={REGIONAL_DECISIONS.map(x => [x, x] as const)} onChange={v => setFilters({ ...filters, regional: v })} />
+              <FilterSelect label="Final status" value={filters.final} options={FINAL_STATUSES.map(x => [x, x] as const)} onChange={v => setFilters({ ...filters, final: v })} />
+              <FilterSelect label="Unresolved issue" value={filters.issue} options={ [['Yes', 'Has issue'], ['No', 'No issue']] as const } onChange={v => setFilters({ ...filters, issue: v })} />
+            </div>}
+            <button onClick={() => setShowFilters(!showFilters)} className="w-full text-center text-[10px] uppercase font-bold text-muted-foreground flex items-center justify-center gap-1 hover:text-primary"><Filter className="w-3 h-3" />{showFilters ? 'Hide filters' : 'More filters'}</button>
+          </div>
+          <ScrollArea className="flex-1"><div className="flex flex-col">
+            {loading ? <div className="p-4 text-sm text-muted-foreground text-center">Loading candidates…</div> : candidates.length === 0 ? <div className="p-4 text-sm text-muted-foreground text-center">No matching candidates</div> : candidates.map(c => {
+              const id = getCandidateId(c); const isSelected = id === selectedId; const stream = getStream(c);
+              const issues = Boolean(val(c, 'has_unresolved_issue', 'unresolved_issue_count'));
+              return <button key={id} data-testid={`candidate-${id}`} onClick={() => selectCandidate(id)} className={cn('w-full text-left p-3 border-b border-border transition-colors hover:bg-slate-50', isSelected ? 'bg-slate-100 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent')}>
+                <div className="flex justify-between items-start mb-1.5"><div className="flex items-center gap-1.5"><span className="font-mono text-xs font-semibold text-slate-700">{id}</span><Badge variant="outline" className="text-[10px] px-1 h-4">{countryCode(c)}</Badge>{issues && <AlertTriangle className="w-3 h-3 text-amber-500" />}</div><Badge variant="outline" className={cn('text-[9px] px-1 h-auto max-w-36 text-right', streamClass(stream))}>{stream || 'Stream unavailable'}</Badge></div>
+                <p className="text-xs text-foreground line-clamp-2 leading-relaxed mb-2 font-medium">{titleOf(c) || <><span className="text-slate-400 italic">Source excerpt · </span>{sourceExcerpt(c) || 'No action statement or excerpt available'}</>}</p>
+                <div className="flex gap-2 items-center"><Badge variant="secondary" className="text-[9px] px-1 h-3.5">{val(c, 'final_status', 'Final_Status') || 'Pending'}</Badge>{criteriaPass(c) && <span className="text-[9px] text-emerald-700">6/6 criteria</span>}</div>
+              </button>;
+            })}
+          </div></ScrollArea>
+        </Panel>
+        <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors cursor-col-resize" />
+        <Panel defaultSize={45} minSize={30} className="flex flex-col bg-slate-100 relative">
+          {activeEvidence ? <><div className="flex-none p-2 border-b bg-white flex items-center overflow-x-auto gap-2 shadow-sm z-10"><span className="text-xs font-semibold text-muted-foreground uppercase ml-1 mr-2">Evidence</span>{evidence.map((e: AnyRecord) => { const eid = String(val(e, 'evidence_id', 'Evidence_ID', 'anchor_id', 'id')); return <button key={eid} onClick={() => setActiveEvidenceId(eid)} className={cn('px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap border', eid === activeEvidenceId ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50')}>{val(e, 'link_role', 'evidence_role', 'Evidence_Role', 'anchor_role', 'role') || 'Source evidence'} · p.{val(e, 'pdf_page', 'PDF_Page', 'page_number', 'matched_page') || '—'}</button>; })}</div>
+               <div className="flex-1 min-h-0 relative overflow-hidden flex flex-col">{document && activeEvidence ? <PdfViewer key={`${docId}-${activeEvidenceId}`} documentId={docId} documentSha256={val(document, 'sha256', 'SHA256', 'document_sha256')} matchedPage={Number(val(activeEvidence, 'pdf_page', 'PDF_Page', 'page_number', 'matched_page') || 1)} pageRotation={evidenceRotation(activeEvidence)} rectangles={val(activeEvidence, 'rectangles', 'evidence_rectangles') || []} anchorRole={val(activeEvidence, 'link_role', 'evidence_role', 'Evidence_Role', 'anchor_role', 'role')} /> : <div className="flex-1 flex items-center justify-center text-sm text-slate-500">{docId ? 'Loading source document…' : 'Document unavailable for this passage'}</div>}
+              <div className="flex-none bg-white border-t p-4 max-h-[30vh] overflow-y-auto"><div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Source passage · {text(val(activeEvidence, 'location_status', 'Location_Status'))}</div><blockquote className="text-sm font-serif italic text-slate-700 border-l-4 border-amber-300 pl-4 py-1 leading-relaxed">{text(evidenceOriginal(activeEvidence))}</blockquote>{evidenceEnglish(activeEvidence) && evidenceEnglish(activeEvidence) !== evidenceOriginal(activeEvidence) && <p className="text-xs mt-3 text-slate-600"><b>English translation:</b> {evidenceEnglish(activeEvidence)}</p>}</div>
+            </div></> : <div className="flex-1 flex items-center justify-center text-slate-400 text-sm bg-slate-50"><div className="text-center"><FileText className="w-12 h-12 mx-auto mb-3 opacity-20" /><p>No linked source passage is available.</p></div></div>}
+        </Panel>
+        <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors cursor-col-resize" />
+        <Panel defaultSize={30} minSize={25} className="flex flex-col bg-card">
+          {detailLoading ? <div className="p-6 text-center text-sm text-muted-foreground">Loading details…</div> : detail ? <>
+            <div className="flex-none p-4 border-b bg-slate-50/50"><div className="flex items-center gap-2 mb-2"><span className="text-lg font-mono font-bold">{getCandidateId(detail)}</span><Badge variant="outline">{countryCode(detail)} · {countryFullName(detail)}</Badge><Badge variant="outline" className={streamClass(getStream(detail))}>{getStream(detail)}</Badge></div><h2 className="text-sm font-semibold leading-snug">{titleOf(detail) || <><span className="text-[10px] uppercase text-slate-500">Source excerpt · </span>{text(sourceExcerpt(detail))}</>}</h2><div className="text-[10px] text-muted-foreground mt-1">Baseline stream: {text(getBaselineStream(detail))} · Effective stream: {text(getStream(detail))}</div></div>
+            <div className="flex border-b bg-white overflow-x-auto">{['Action', 'Evidence', 'Assessment', 'Relationships', 'Review history'].map(t => <button key={t} onClick={() => setTab(t)} className={cn('px-3 py-2 text-[10px] font-semibold whitespace-nowrap border-b-2', tab === t ? 'border-primary text-primary' : 'border-transparent text-slate-500')}>{t}</button>)}</div>
+            <ScrollArea className="flex-1 p-4"><div className="space-y-5 pb-8">
+              {tab === 'Action' && <>
+                <section><SectionTitle>Action statement</SectionTitle>
+                  <Field label="English action statement" value={val(detail, 'reform_action_statement_english', 'Reform_Action_Statement_English')} />
+                  <Field label="Original-language action" value={val(detail, 'reform_action_text_original_language', 'reform_action_statement_original', 'Reform_Action_Text_Original_Language', 'original_compact_text')} />
+                  <Field label="Source language" value={val(detail, 'source_language', 'Source_Language')} />
+                </section>
+                <section><SectionTitle>Classification</SectionTitle>
+                  <Field label="Pillar" value={val(detail, 'primary_pillar', 'Primary_Pillar', 'water_security_pillar')} />
+                  <Field label="Primary domain" value={val(detail, 'primary_tier1_reform_domain', 'primary_domain_tier_1', 'reform_domain_tier_1', 'Primary_Tier1_Reform_Domain')} />
+                  <Field label="Tier 2 category" value={val(detail, 'tier2_reform_category', 'reform_domain_tier_2', 'Tier2_Reform_Category')} />
+                  <Field label="Secondary domains" value={arrayText(val(detail, 'secondary_reform_domain_tags', 'additional_domain_tags', 'secondary_domains', 'Secondary_Reform_Domain_Tags'))} />
+                  <Field label="Scalable solutions" value={arrayText([val(detail, 'primary_scalable_solution', 'Primary_Scalable_Solution'), ...tagValues(val(detail, 'additional_scalable_solutions', 'Additional_Scalable_Solutions'))])} />
+                  <Field label="Responsible actor" value={val(detail, 'lead_institution_actor', 'responsible_actor', 'Responsible_Actor', 'responsible_entity')} />
+                  <Field label="Financing relevance" value={val(detail, 'water_financing_relevance', 'financing_relevance', 'Water_Financing_Relevance', 'Financing_Relevance')} />
+                  <Field label="Temporal status" value={val(detail, 'temporal_status', 'Temporal_Status')} />
+                  <Field label="Completion criterion" value={val(detail, 'monitoring_completion_criterion', 'completion_criterion', 'Monitoring_Completion_Criterion')} />
+                  <Field label="Rationale" value={val(detail, 'llm_decision_rationale', 'decision_rationale', 'rationale', 'LLM_Decision_Rationale')} />
+                </section>
+                <section><SectionTitle>Stage status · not configured</SectionTitle>
+                  <p className="text-xs text-slate-600">Reviewer names are prototype attribution only, not verified identity. Stage assignments and verified permission enforcement are not configured; no authoritative Global or Regional decision can be submitted here.</p>
+                  <div className="grid grid-cols-2 gap-2 mt-2"><Field label="Global decision" value={currentDecision} /><Field label="Regional confirmation" value={regionalDecision} /></div>
+                  <Field label="Final status" value={val(detail, 'final_status', 'Final_Status') || 'Pending'} />
+                  <Field label="Server-derived final reform total" value={countInFinalTotal(detail) ? 'Included' : 'Not included'} />
+                </section>
+              </>}
+              {tab === 'Evidence' && <><SectionTitle>Linked source passages ({evidence.length})</SectionTitle>{evidence.map((e: AnyRecord) => { const evidenceId = String(val(e, 'evidence_id', 'Evidence_ID', 'anchor_id', 'id')); return <button key={evidenceId} onClick={() => setActiveEvidenceId(evidenceId)} className={cn('w-full text-left rounded border p-3 space-y-2 hover:bg-slate-50', evidenceId === activeEvidenceId && 'border-primary bg-slate-50')}><div className="flex justify-between gap-2"><b className="text-xs">{val(e, 'link_role', 'evidence_role', 'Evidence_Role', 'role') || 'Evidence'}</b><span className="text-[10px] text-slate-500">{val(e, 'document_id', 'Document_ID')} · PDF p.{val(e, 'pdf_page', 'PDF_Page', 'page_number', 'matched_page')}</span></div><p className="text-xs italic">{text(evidenceOriginal(e))}</p>{evidenceEnglish(e) && evidenceEnglish(e) !== evidenceOriginal(e) && <p className="text-xs text-slate-600"><b>English translation:</b> {evidenceEnglish(e)}</p>}<p className="text-[10px] text-amber-800">Location status: {text(val(e, 'location_status', 'Location_Status'))}</p></button>; })}</>}
+              {tab === 'Assessment' && <><SectionTitle>Six binary criteria</SectionTitle><p className="text-[10px] text-slate-500 mb-2">0 means the criterion is not established by the current evidence; it is not necessarily a claim that the real-world condition is false.</p>{CRITERIA.map(([key, definition], index) => { const answer = getCriterion(detail, index + 1); return <div key={key} className="flex items-start gap-2 border-b py-2"><span className={cn('font-mono text-xs font-bold w-7', answer ? 'text-emerald-700' : 'text-slate-500')}>{key}: {answer === null ? '—' : answer ? '1' : '0'}</span><div><p className="text-xs font-medium">{definition}</p><p className="text-[10px] text-slate-500">{val(detail, `c${index + 1}_rationale`, `criterion_${index + 1}_rationale`, `C${index + 1}_Rationale`) || 'No separate criterion note supplied.'}</p></div></div>; })}<div className="mt-3 p-3 bg-slate-50 rounded text-xs font-semibold">Six-criteria result: {criteriaPass(detail) ? <span className="text-emerald-700">Pass (6/6)</span> : <span>Not passed / not established</span>}</div><Field label="Server-derived final reform total" value={countInFinalTotal(detail) ? 'Included' : 'Not included'} /><Field label="Assessment revision" value={val(detail, 'assessment_revision', 'current_assessment_revision', 'Assessment_Revision') || '1'} /><SectionTitle>QA checks ({candidateQaChecks.length})</SectionTitle>{candidateQaChecks.length ? candidateQaChecks.map((check, index) => <div key={val(check, 'qa_check_id', 'id') || index} className="mb-2 rounded border p-3"><div className="flex justify-between gap-2"><b className="text-xs">{val(check, 'check_name', 'name') || 'QA check'}</b><Badge variant="outline">{val(check, 'status') || 'Status unavailable'}</Badge></div>{val(check, 'detail') && <p className="mt-1 text-xs text-slate-600">{val(check, 'detail')}</p>}</div>) : <p className="text-xs text-slate-500">{qaError || (datasetId ? 'No QA checks returned for this candidate.' : 'QA checks are unavailable for the legacy dataset.')}</p>}</>}
+              {tab === 'Relationships' && <><SectionTitle>Parent and related candidates</SectionTitle><div className="mb-3"><label className="text-[10px] font-semibold uppercase text-slate-500 block mb-1">Parent reform action</label>{val(detail, 'parent_reform_action_id', 'Parent_Reform_Action_ID') ? <button onClick={() => selectCandidate(val(detail, 'parent_reform_action_id', 'Parent_Reform_Action_ID'))} className="text-xs font-mono text-primary underline">{val(detail, 'parent_reform_action_id', 'Parent_Reform_Action_ID')}</button> : <p className="text-xs">Not provided</p>}</div>{relationships.map(r => { const other = val(r, 'target_candidate_id') === getCandidateId(detail) ? val(r, 'source_candidate_id') : val(r, 'target_candidate_id'); return <button key={val(r, 'relationship_id')} onClick={() => selectCandidate(other)} className="w-full p-3 border rounded text-left hover:bg-slate-50"><span className="text-xs font-mono font-bold text-primary underline">{other}</span><span className="block text-[10px] text-slate-500 mt-1">{val(r, 'relationship_type', 'Relationship_Type')} · {val(r, 'relationship_status', 'Relationship_Status')}</span><span className="block text-xs mt-1">{val(r, 'rationale', 'relationship_note', 'Rationale')}</span></button>; })}{!relationships.length && <p className="text-xs text-slate-500">No related candidates returned.</p>}</>}
+              {tab === 'Review history' && <><SectionTitle>Review history · {reviews.length}</SectionTitle><div className="rounded bg-amber-50 border border-amber-200 p-3 text-[11px] text-amber-900">Identity selection is not identity verification. This UI does not expose or imply authorized stage permissions.</div>{reviews.length ? reviews.map((r: AnyRecord, index: number) => <div key={val(r, 'event_id', 'review_event_id', 'review_id') || index} className="p-3 border rounded space-y-1"><div className="flex justify-between"><b className="text-xs">{val(r, 'reviewer_name', 'display_name') || (val(r, 'reviewer_id') ? `Reviewer ID ${val(r, 'reviewer_id')}` : 'Reviewer identity unavailable')}</b><Badge variant="outline">{val(r, 'stage', 'review_stage') || 'Legacy review'} · {val(r, 'decision', 'inclusion_decision')}</Badge></div><p className="text-xs text-slate-600">{val(r, 'comment', 'reviewer_comment') || 'No comment'}</p><p className="text-[10px] text-slate-400">{val(r, 'created_at', 'created_at_utc', 'occurred_at')} · revision {val(r, 'assessment_revision', 'revision') || 'unknown'} · identity unverified</p></div>) : <p className="text-xs text-slate-500">No review events recorded.</p>}</>}
+            </div></ScrollArea>
+          </> : <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">{detailLoading ? 'Loading details…' : 'Select a candidate'}</div>}
+        </Panel>
+      </PanelGroup>
     </div>
-  );
+  </div>;
+}
+
+function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: ReadonlyArray<readonly [string, string]>; onChange: (value: string) => void }) {
+  return <select aria-label={label} value={value} onChange={e => onChange(e.target.value)} className="h-8 min-w-0 w-full rounded-md border border-input bg-background px-2 text-[10px] text-foreground">
+    <option value="All">All {label}</option>{options.map(([v, name]) => <option key={v} value={v}>{name}</option>)}
+  </select>;
+}
+
+function SectionTitle({ children }: { children: ReactNode }) {
+  return <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b pb-1 mb-3">{children}</h3>;
+}
+
+function Field({ label, value }: { label: string; value: unknown }) {
+  return <div className="mb-3"><label className="text-[10px] font-semibold uppercase text-slate-500 block mb-1">{label}</label><div className="text-xs leading-relaxed whitespace-pre-wrap text-slate-800">{text(value)}</div></div>;
 }

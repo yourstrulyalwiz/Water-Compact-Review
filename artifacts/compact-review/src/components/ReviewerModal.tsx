@@ -7,9 +7,10 @@ type ReviewerName = typeof REVIEWER_NAMES[number];
 
 interface ReviewerModalProps {
   onLogin: (identity: ReviewerIdentity) => void;
+  onViewWithoutReviewer: () => void;
 }
 
-export function ReviewerModal({ onLogin }: ReviewerModalProps) {
+export function ReviewerModal({ onLogin, onViewWithoutReviewer }: ReviewerModalProps) {
   const [selectedName, setSelectedName] = useState<ReviewerName | ''>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -61,7 +62,7 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
             <h2 className="text-white font-semibold text-base">Select Reviewer</h2>
           </div>
           <p className="text-slate-400 text-xs leading-relaxed">
-            Choose your name to begin reviewing.
+            Choose a reviewer name for prototype attribution. This does not verify your identity or establish review permissions.
           </p>
         </div>
 
@@ -69,7 +70,7 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block">
-              Your Name
+              Selected Reviewer Name
             </label>
             <div className="relative">
               <User className="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
@@ -99,11 +100,18 @@ export function ReviewerModal({ onLogin }: ReviewerModalProps) {
             disabled={loading || !selectedName}
             className="w-full py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
           >
-            {loading ? 'Signing in…' : 'Continue'}
+            {loading ? 'Selecting…' : 'Continue'}
+          </button>
+          <button
+            type="button"
+            onClick={onViewWithoutReviewer}
+            className="w-full py-2 text-sm font-medium text-slate-600 underline hover:text-slate-900"
+          >
+            View dataset without selecting a reviewer
           </button>
 
           <p className="text-center text-[10px] text-slate-400 leading-relaxed">
-            Source data and LLM classifications are never modified.
+            Name selection is not authentication. No stage decision or finalization is available until verified identity and assignments are configured.
           </p>
         </form>
       </div>

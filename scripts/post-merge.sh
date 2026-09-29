@@ -1,4 +1,6 @@
 #!/bin/bash
 set -e
 pnpm install --frozen-lockfile
-pnpm --filter db push
+# The source schema is SQL-managed. Never run Drizzle push here:
+# it may reconcile away existing review history or staged v5 tables.
+# Apply versioned migrations and run the v5 import explicitly in development.
