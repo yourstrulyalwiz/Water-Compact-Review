@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool, type PoolClient } from "pg";
-import XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 export const DEFAULT_MANIFEST = "source_package/v5/import-manifest.json";
@@ -131,6 +132,7 @@ function cellValue(value: unknown): unknown {
   if (value && typeof value === "object") {
     const object = value as Record<string, unknown>;
     if ("result" in object) return cellValue(object.result);
+    if ("formula" in object) return null;
     if (Array.isArray(object.richText)) {
       return object.richText.map((part) => String((part as { text?: unknown }).text ?? "")).join("");
     }
@@ -138,6 +140,28 @@ function cellValue(value: unknown): unknown {
     if ("hyperlink" in object && typeof object.hyperlink === "string") return object.hyperlink;
   }
   return value;
+}
+
+async function loadSourceWorkbook(filePath: string): Promise<ExcelJS.Workbook> {
+  // The supplied workbooks use x:-prefixed SpreadsheetML elements. ExcelJS
+  // expects unprefixed elements and cannot parse the source files directly.
+  // Normalize only the in-memory ZIP; never rewrite the hashed source files.
+  const zip = await JSZip.loadAsync(await readFile(filePath));
+  for (const [name, entry] of Object.entries(zip.files)) {
+    if (!name.startsWith("xl/") || !name.endsWith(".xml")) continue;
+    let xml = await entry.async("string");
+    if (name.startsWith("xl/worksheets/")) {
+      // We import cell data, not table styling; ExcelJS cannot parse these
+      // workbooks' prefixed table definitions.
+      xml = xml.replace(/<(?:x:)?tableParts\b[^>]*>.*?<\/(?:x:)?tableParts>/gs, "");
+    }
+    zip.file(name, xml.replace(/(<\/?)x:/g, "$1").replace(/xmlns:x=/g, "xmlns="));
+  }
+  const workbook = new ExcelJS.Workbook();
+  const normalized = Buffer.from(await zip.generateAsync({ type: "arraybuffer" }));
+  // ExcelJS's Buffer declaration predates the current Node Buffer generics.
+  await workbook.xlsx.load(normalized as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+  return workbook;
 }
 
 function isBlankRow(values: Record<string, unknown>): boolean {
@@ -222,25 +246,24 @@ async function readWorkbook(
   const workbookPath = resolveInside(manifestRoot, source.path);
   const data: WorkbookData = { source, filePath: workbookPath, sheets: {}, headers: {} };
   const fileName = source.path;
-  let workbook: XLSX.WorkBook;
+  let workbook: ExcelJS.Workbook;
   try {
-    workbook = XLSX.readFile(workbookPath, { cellFormula: true, cellDates: true, cellText: false, raw: true });
+    workbook = await loadSourceWorkbook(workbookPath);
   } catch (error) {
     addDiagnostic(diagnostics, "error", fileName, "", null, null, null, `Cannot read XLSX: ${String(error)}`);
     return null;
   }
 
   for (const [sheetName, expectedHeaders] of Object.entries(source.sheet_headers)) {
-    const worksheet = workbook.Sheets[sheetName];
+    const worksheet = workbook.getWorksheet(sheetName);
     if (!worksheet) {
       addDiagnostic(diagnostics, "error", fileName, sheetName, null, null, null, "Manifest-listed worksheet is missing");
       continue;
     }
-    const range = worksheet["!ref"] ? XLSX.utils.decode_range(worksheet["!ref"]) : { s: { c: 0, r: 0 }, e: { c: -1, r: -1 } };
+    const columnCount = Math.max(worksheet.columnCount, expectedHeaders.length);
     const headers: string[] = [];
-    for (let column = 0; column < Math.max(range.e.c + 1, expectedHeaders.length); column += 1) {
-      const headerCell = worksheet[XLSX.utils.encode_cell({ r: 0, c: column })];
-      const value = cellValue(headerCell?.v);
+    for (let column = 1; column <= columnCount; column += 1) {
+      const value = cellValue(worksheet.getRow(1).getCell(column).value);
       headers.push(value === null || value === undefined ? "" : String(value));
     }
     while (headers.length && headers.at(-1) === "") headers.pop();
@@ -257,16 +280,16 @@ async function readWorkbook(
 
     const rows: SheetRow[] = [];
     if (IMPORT_SHEETS.includes(sheetName)) {
-      for (let rowNumber = 2; rowNumber <= range.e.r + 1; rowNumber += 1) {
+      for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber += 1) {
         const values: Record<string, unknown> = {};
         const formulas: Record<string, { formula: string; result: unknown }> = {};
-        for (let column = 0; column < headers.length; column += 1) {
-          const header = headers[column];
+        for (let column = 1; column <= headers.length; column += 1) {
+          const header = headers[column - 1];
           if (!header) continue;
-          const cell = worksheet[XLSX.utils.encode_cell({ r: rowNumber - 1, c: column })];
-          values[header] = cellValue(cell?.v);
-          if (cell?.f) {
-            formulas[header] = { formula: String(cell.f), result: cellValue(cell.v) };
+          const rawValue = worksheet.getRow(rowNumber).getCell(column).value;
+          values[header] = cellValue(rawValue);
+          if (rawValue && typeof rawValue === "object" && "formula" in rawValue) {
+            formulas[header] = { formula: String(rawValue.formula), result: cellValue(rawValue) };
           }
         }
         if (!isBlankRow(values)) rows.push({ rowNumber, values, formulas });
