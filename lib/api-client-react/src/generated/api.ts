@@ -1682,7 +1682,7 @@ export const getExportMasterCsvUrl = () => {
 }
 
 /**
- * @summary Export all active dataset baseline fields plus current assessment
+ * @summary Export active dataset and current assessment with each named reviewer's latest decision, comments, and consensus snapshot
  */
 export const exportMasterCsv = async ( options?: Parameters<typeof customFetch>[1]): Promise<string> => {
 
@@ -1729,7 +1729,7 @@ export type ExportMasterCsvQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Export all active dataset baseline fields plus current assessment
+ * @summary Export active dataset and current assessment with each named reviewer's latest decision, comments, and consensus snapshot
  */
 
 export function useExportMasterCsv<TData = Awaited<ReturnType<typeof exportMasterCsv>>, TError = ErrorType<unknown>>(

@@ -460,7 +460,7 @@ export const SubmitEvidenceCorrectionResponse = zod.void()
 
 
 /**
- * @summary Export all active dataset baseline fields plus current assessment
+ * @summary Export active dataset and current assessment with each named reviewer's latest decision, comments, and consensus snapshot
  */
 export const ExportMasterCsvResponse = zod.unknown()
 

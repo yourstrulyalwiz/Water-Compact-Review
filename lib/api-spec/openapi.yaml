@@ -564,7 +564,7 @@ paths:
     get:
       operationId: exportMasterCsv
       tags: [reviews]
-      summary: Export all active dataset baseline fields plus current assessment
+      summary: Export active dataset and current assessment with each named reviewer's latest decision, comments, and consensus snapshot
       responses:
         "200":
           description: UTF-8 CSV

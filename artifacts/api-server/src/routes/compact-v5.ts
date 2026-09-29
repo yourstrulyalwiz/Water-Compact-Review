@@ -18,6 +18,7 @@ const router: IRouter = Router();
 const SERVER_MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const GLOBAL_DECISIONS = new Set(["Approve", "Revise", "Reject", "Consolidate", "Needs Discussion"]);
 const REGIONAL_DECISIONS = new Set(["Confirm", "Confirm with Revision", "Disagree", "Needs Discussion", "Pending"]);
+const MASTER_REVIEWERS = ["Christina", "Billy", "Juliana", "Patricia"] as const;
 const MASTER_FIELDS = [
   ["Candidate_ID", "candidate_id"],
   ["Country", "country"],
@@ -860,14 +861,58 @@ async function exportCandidates(req: any, res: any, finalOnly: boolean) {
   let rows = await loadCandidates(id);
   rows = applyFilters(rows, query);
   if (finalOnly) rows = rows.filter((row) => row.count_in_final_reform_total === 1);
+  // The wide master file is a snapshot of the latest opinion from each named
+  // reviewer on the current assessment. The append-only history is exported separately.
+  const reviewerDecisions = new Map<string, Map<string, {
+    decision: string;
+    comment: string | null;
+    reviewed_at: string;
+  }>>();
+  if (!finalOnly) {
+    const reviews = await pool.query(
+      `SELECT DISTINCT ON (e.candidate_id, e.assessment_revision, r.display_name)
+              e.candidate_id, e.assessment_revision, r.display_name,
+              e.decision, e.comment, e.created_at
+       FROM compact_v5.review_events e
+       JOIN public.reviewers r ON r.reviewer_id = e.reviewer_id
+       WHERE e.dataset_id = $1 AND e.stage = 'Global'
+         AND r.display_name = ANY($2::text[])
+       ORDER BY e.candidate_id, e.assessment_revision, r.display_name,
+                e.created_at DESC, e.review_event_id DESC`,
+      [id, [...MASTER_REVIEWERS]],
+    );
+    for (const review of reviews.rows) {
+      const key = `${review.candidate_id}:${review.assessment_revision}`;
+      const byReviewer = reviewerDecisions.get(key) ?? new Map();
+      byReviewer.set(String(review.display_name), {
+        decision: review.decision === "Approve" ? "Accept" : String(review.decision),
+        comment: review.comment ?? null,
+        reviewed_at: new Date(review.created_at).toISOString(),
+      });
+      reviewerDecisions.set(key, byReviewer);
+    }
+  }
   const headers = [
     ...MASTER_FIELDS.map(([header]) => header),
     "Current_Assessment_Revision",
     "Baseline_Candidate_Stream",
     "Count_in_Final_Reform_Total_Server_Derived",
+    ...(!finalOnly ? [
+      ...MASTER_REVIEWERS.flatMap((name) => [
+        `${name.toLowerCase()}_decision`,
+        `${name.toLowerCase()}_comment`,
+        `${name.toLowerCase()}_reviewed_at`,
+      ]),
+      "review_count", "has_conflict", "consensus_decision",
+    ] : []),
   ];
   csv(
-    rows.map((row) => [
+    rows.map((row) => {
+      const byReviewer = reviewerDecisions.get(`${row.candidate_id}:${row.assessment_revision}`);
+      const latest = MASTER_REVIEWERS.map((name) => byReviewer?.get(name));
+      const decisions = latest.flatMap((review) => review ? [review.decision] : []);
+      const hasConflict = new Set(decisions).size > 1;
+      return [
       ...MASTER_FIELDS.map(([, key]) => {
         if (key === "global_review_decision") return row.global_review_decision;
         if (key === "regional_confirmation_decision") return row.regional_confirmation_decision;
@@ -882,7 +927,18 @@ async function exportCandidates(req: any, res: any, finalOnly: boolean) {
       row.assessment_revision,
       row.baseline.candidate_stream,
       row.count_in_final_reform_total,
-    ]),
+      ...(!finalOnly ? [
+        ...latest.flatMap((review) => [
+          review?.decision ?? null,
+          review?.comment ?? null,
+          review?.reviewed_at ?? null,
+        ]),
+        decisions.length,
+        hasConflict ? "TRUE" : "FALSE",
+        decisions.length && !hasConflict ? decisions[0] : null,
+      ] : []),
+    ];
+    }),
     headers,
     finalOnly ? "final-approved.csv" : "master.csv",
     res,
