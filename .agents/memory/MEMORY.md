@@ -1,0 +1,1 @@
+- [Managed Publish and secondary schemas](managed-publish-secondary-schema.md) — a development-only secondary schema did not appear in the production Publish diff; verify before rollout.
