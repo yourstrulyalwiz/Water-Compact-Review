@@ -5,6 +5,7 @@ import { useLocation, useSearch } from 'wouter';
 import { AlertTriangle, ChevronLeft, ChevronRight, Download, FileSignature, FileText, Filter, Search, User } from 'lucide-react';
 import { PdfViewer } from '@/components/PdfViewer';
 import { ReviewerModal } from '@/components/ReviewerModal';
+import { ReviewDecisionForm } from '@/components/ReviewDecisionForm';
 import { useReviewer } from '@/hooks/use-reviewer';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -106,7 +107,6 @@ export default function Workspace() {
   const [qaChecks, setQaChecks] = useState<AnyRecord[]>([]);
   const [qaError, setQaError] = useState('');
   const [relationships, setRelationships] = useState<AnyRecord[]>([]);
-  const [reviews, setReviews] = useState<AnyRecord[]>([]);
   const [document, setDocument] = useState<AnyRecord | null>(null);
   const [activeEvidenceId, setActiveEvidenceId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -118,6 +118,21 @@ export default function Workspace() {
   const [showFilters, setShowFilters] = useState(false);
   const [tab, setTab] = useState('Action');
   const [exportMessage, setExportMessage] = useState('');
+
+  const refreshAfterReview = async (candidateId: string) => {
+    try {
+      const [updated, list] = await Promise.all([
+        readJson<any>(`/api/candidates/${encodeURIComponent(candidateId)}`),
+        readJson<any>('/api/candidates?limit=500'),
+      ]);
+      const updatedDetail = flattenCandidate(updated?.candidate ?? updated?.detail ?? updated);
+      setDetail(current => current && getCandidateId(current) === candidateId ? updatedDetail : current);
+      const rows = Array.isArray(list) ? list : list?.candidates ?? list?.items ?? [];
+      setAllCandidates(rows.map(flattenCandidate));
+    } catch {
+      setError('Review saved, but the page could not refresh. Reload to see the updated history.');
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -196,19 +211,17 @@ export default function Workspace() {
   }, [candidates, selectedId, location, searchParams, setLocation]);
 
   useEffect(() => {
-    if (!selectedId) { setDetail(null); setReviews([]); setRelationships([]); setDocument(null); return; }
+    if (!selectedId) { setDetail(null); setRelationships([]); setDocument(null); return; }
     let alive = true;
     setDetailLoading(true);
     setDetail(null);
     setDocument(null);
-    setReviews([]);
     setRelationships([]);
     setActiveEvidenceId('');
     readJson<any>(`/api/candidates/${encodeURIComponent(selectedId)}`).then(d => {
       if (!alive) return;
       const candidateDetail = flattenCandidate(d?.candidate ?? d?.detail ?? d);
       setDetail(candidateDetail);
-      setReviews(Array.isArray(candidateDetail.review_events) ? candidateDetail.review_events : Array.isArray(candidateDetail.reviews) ? candidateDetail.reviews : Array.isArray(candidateDetail.events) ? candidateDetail.events : []);
       setRelationships(Array.isArray(candidateDetail.relationships) ? candidateDetail.relationships : []);
       const evidence = evidenceOf(candidateDetail);
        const first = evidence.find((e: AnyRecord) => /canonical action/i.test(val(e, 'link_role', 'evidence_role', 'Evidence_Role', 'anchor_role', 'role'))) || evidence[0];
@@ -219,6 +232,7 @@ export default function Workspace() {
     return () => { alive = false; };
   }, [selectedId]);
 
+  const reviews = Array.isArray(detail?.review_events) ? detail.review_events : Array.isArray(detail?.reviews) ? detail.reviews : Array.isArray(detail?.events) ? detail.events : [];
   const evidence = evidenceOf(detail);
   const activeEvidence = evidence.find((e: AnyRecord) => String(val(e, 'evidence_id', 'anchor_id', 'id')) === activeEvidenceId);
   const docId = val(activeEvidence, 'document_id', 'Document_ID');
@@ -346,6 +360,7 @@ export default function Workspace() {
                   <Field label="Secondary domains" value={arrayText(val(detail, 'secondary_reform_domain_tags', 'additional_domain_tags', 'secondary_domains', 'Secondary_Reform_Domain_Tags'))} />
                   <Field label="Scalable solutions" value={arrayText([val(detail, 'primary_scalable_solution', 'Primary_Scalable_Solution'), ...tagValues(val(detail, 'additional_scalable_solutions', 'Additional_Scalable_Solutions'))])} />
                 </section>
+                {datasetId && <ReviewDecisionForm key={`${getCandidateId(detail)}-${reviewer?.reviewer_id || 'guest'}`} candidateId={String(getCandidateId(detail))} revision={Number(val(detail, 'assessment_revision', 'current_assessment_revision'))} reviewer={reviewer} reviews={reviews} onSelectReviewer={() => setShowReviewerModal(true)} onSaved={() => refreshAfterReview(String(getCandidateId(detail)))} />}
                 <section><SectionTitle>Stage status · not configured</SectionTitle>
                   <p className="text-xs text-slate-600">Reviewer names are prototype attribution only, not verified identity. Stage assignments and verified permission enforcement are not configured; no authoritative Global or Regional decision can be submitted here.</p>
                   <div className="grid grid-cols-2 gap-2 mt-2"><Field label="Global decision" value={currentDecision} /><Field label="Regional confirmation" value={regionalDecision} /></div>
