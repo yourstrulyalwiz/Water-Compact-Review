@@ -41,9 +41,18 @@ router.post(
       return;
     }
 
+    const selectedName = display_name.trim();
+    // Older database copies may contain only part of the fixed reviewer roster.
+    // The unused legacy PIN column still needs a value; it is never used for sign-in.
+    await pool.query(
+      `INSERT INTO public.reviewers (display_name, pin_hash)
+       VALUES ($1, crypt(gen_random_uuid()::text, gen_salt('bf')))
+       ON CONFLICT (display_name) DO NOTHING`,
+      [selectedName],
+    );
     const result = await pool.query(
-      `SELECT reviewer_id, display_name FROM reviewers WHERE display_name = $1`,
-      [display_name.trim()],
+      `SELECT reviewer_id, display_name FROM public.reviewers WHERE display_name = $1`,
+      [selectedName],
     );
 
     const reviewer = result.rows[0];

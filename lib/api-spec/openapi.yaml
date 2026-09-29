@@ -584,7 +584,7 @@ paths:
     get:
       operationId: exportReviewHistoryCsv
       tags: [reviews]
-      summary: Export append-only stage review history
+      summary: Export every append-only reviewer decision with reviewer ID and name
       responses:
         "200":
           description: UTF-8 CSV
@@ -1102,6 +1102,7 @@ components:
         event_id: { type: string }
         candidate_id: { type: string }
         reviewer_id: { type: string }
+        reviewer_name: { type: string }
         stage: { type: string }
         decision: { type: string }
         comment: { type: ["string", "null"] }

@@ -298,6 +298,7 @@ export const ListCandidateReviewsResponse = zod.object({
   "event_id": zod.string(),
   "candidate_id": zod.string(),
   "reviewer_id": zod.string().optional(),
+  "reviewer_name": zod.string().optional(),
   "stage": zod.string(),
   "decision": zod.string(),
   "comment": zod.string().nullish(),
@@ -331,6 +332,7 @@ export const SubmitCandidateReviewResponse = zod.object({
   "event_id": zod.string(),
   "candidate_id": zod.string(),
   "reviewer_id": zod.string().optional(),
+  "reviewer_name": zod.string().optional(),
   "stage": zod.string(),
   "decision": zod.string(),
   "comment": zod.string().nullish(),
@@ -470,7 +472,7 @@ export const ExportFinalApprovedCsvResponse = zod.unknown()
 
 
 /**
- * @summary Export append-only stage review history
+ * @summary Export every append-only reviewer decision with reviewer ID and name
  */
 export const ExportReviewHistoryCsvResponse = zod.unknown()
 

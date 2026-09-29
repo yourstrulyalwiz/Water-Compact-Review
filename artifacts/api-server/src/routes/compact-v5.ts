@@ -330,10 +330,13 @@ router.get("/candidates/:candidateId", async (req: any, res): Promise<void> => {
       [id, candidateId],
     ),
     pool.query(
-      `SELECT review_event_id AS event_id, candidate_id, reviewer_id, stage, decision, comment, assessment_revision, created_at,
+      `SELECT e.review_event_id AS event_id, e.candidate_id, e.reviewer_id, r.display_name AS reviewer_name,
+              e.stage, e.decision, e.comment, e.assessment_revision, e.created_at,
               false AS identity_verified
-       FROM compact_v5.review_events WHERE dataset_id = $1 AND candidate_id = $2
-       ORDER BY created_at, event_id`,
+       FROM compact_v5.review_events e
+       JOIN public.reviewers r ON r.reviewer_id = e.reviewer_id
+       WHERE e.dataset_id = $1 AND e.candidate_id = $2
+       ORDER BY e.created_at, event_id`,
       [id, candidateId],
     ),
   ]);
@@ -345,10 +348,13 @@ router.get("/candidates/:candidateId/reviews", async (req: any, res): Promise<vo
   if (!id) return;
   const candidateId = param(req.params.candidateId);
   const result = await pool.query(
-    `SELECT review_event_id AS event_id, candidate_id, reviewer_id, stage, decision, comment, assessment_revision, created_at,
+    `SELECT e.review_event_id AS event_id, e.candidate_id, e.reviewer_id, r.display_name AS reviewer_name,
+            e.stage, e.decision, e.comment, e.assessment_revision, e.created_at,
             false AS identity_verified
-     FROM compact_v5.review_events WHERE dataset_id = $1 AND candidate_id = $2
-     ORDER BY created_at, event_id`,
+     FROM compact_v5.review_events e
+     JOIN public.reviewers r ON r.reviewer_id = e.reviewer_id
+     WHERE e.dataset_id = $1 AND e.candidate_id = $2
+     ORDER BY e.created_at, event_id`,
     [id, candidateId],
   );
   const assessment = await latestAssessment(id, candidateId);
@@ -404,10 +410,16 @@ router.post("/candidates/:candidateId/reviews", async (req: any, res): Promise<v
       return;
     }
     const inserted = await client.query(
-      `INSERT INTO compact_v5.review_events
-         (dataset_id, candidate_id, reviewer_id, stage, decision, comment, assessment_revision)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING review_event_id AS event_id, candidate_id, reviewer_id, stage, decision, comment, assessment_revision, created_at, false AS identity_verified`,
+      `WITH inserted AS (
+         INSERT INTO compact_v5.review_events
+           (dataset_id, candidate_id, reviewer_id, stage, decision, comment, assessment_revision)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING review_event_id, candidate_id, reviewer_id, stage, decision, comment, assessment_revision, created_at
+       )
+       SELECT i.review_event_id AS event_id, i.candidate_id, i.reviewer_id,
+              r.display_name AS reviewer_name, i.stage, i.decision, i.comment,
+              i.assessment_revision, i.created_at, false AS identity_verified
+       FROM inserted i JOIN public.reviewers r ON r.reviewer_id = i.reviewer_id`,
       [id, candidateId, reviewerId, stage, decision, comment ?? null, expected],
     );
     await client.query("COMMIT");
@@ -883,11 +895,14 @@ router.get("/export/review-history.csv", async (req: any, res): Promise<void> =>
   const id = datasetId(req);
   if (!id) return;
   const result = await pool.query(
-    `SELECT review_event_id AS event_id, dataset_id, candidate_id, reviewer_id, stage, decision, comment, assessment_revision, created_at
-     FROM compact_v5.review_events WHERE dataset_id = $1 ORDER BY created_at, event_id`,
+    `SELECT e.review_event_id AS event_id, e.dataset_id, e.candidate_id, e.reviewer_id,
+            r.display_name AS reviewer_name, e.stage, e.decision, e.comment, e.assessment_revision, e.created_at
+     FROM compact_v5.review_events e
+     JOIN public.reviewers r ON r.reviewer_id = e.reviewer_id
+     WHERE e.dataset_id = $1 ORDER BY e.created_at, event_id`,
     [id],
   );
-  const headers = ["event_id", "dataset_id", "candidate_id", "reviewer_id", "stage", "decision", "comment", "assessment_revision", "created_at"];
+  const headers = ["event_id", "dataset_id", "candidate_id", "reviewer_id", "reviewer_name", "stage", "decision", "comment", "assessment_revision", "created_at"];
   csv(result.rows.map((row) => headers.map((key) => row[key])), headers, "review-history.csv", res);
 });
 
@@ -895,11 +910,14 @@ router.get("/export/decisions.csv", async (req: any, res): Promise<void> => {
   const id = datasetId(req);
   if (!id) return;
   const result = await pool.query(
-    `SELECT review_event_id AS event_id, dataset_id, candidate_id, reviewer_id, stage, decision, comment, assessment_revision, created_at
-     FROM compact_v5.review_events WHERE dataset_id = $1 ORDER BY created_at, event_id`,
+    `SELECT e.review_event_id AS event_id, e.dataset_id, e.candidate_id, e.reviewer_id,
+            r.display_name AS reviewer_name, e.stage, e.decision, e.comment, e.assessment_revision, e.created_at
+     FROM compact_v5.review_events e
+     JOIN public.reviewers r ON r.reviewer_id = e.reviewer_id
+     WHERE e.dataset_id = $1 ORDER BY e.created_at, event_id`,
     [id],
   );
-  const headers = ["event_id", "dataset_id", "candidate_id", "reviewer_id", "stage", "decision", "comment", "assessment_revision", "created_at"];
+  const headers = ["event_id", "dataset_id", "candidate_id", "reviewer_id", "reviewer_name", "stage", "decision", "comment", "assessment_revision", "created_at"];
   csv(result.rows.map((row) => headers.map((key) => row[key])), headers, "decisions.csv", res);
 });
 

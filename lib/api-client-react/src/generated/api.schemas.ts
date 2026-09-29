@@ -262,6 +262,7 @@ export interface ReviewEvent {
   event_id: string;
   candidate_id: string;
   reviewer_id?: string;
+  reviewer_name?: string;
   stage: string;
   decision: string;
   /** @nullable */

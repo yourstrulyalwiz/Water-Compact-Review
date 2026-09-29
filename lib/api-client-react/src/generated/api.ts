@@ -1836,7 +1836,7 @@ export const getExportReviewHistoryCsvUrl = () => {
 }
 
 /**
- * @summary Export append-only stage review history
+ * @summary Export every append-only reviewer decision with reviewer ID and name
  */
 export const exportReviewHistoryCsv = async ( options?: Parameters<typeof customFetch>[1]): Promise<string> => {
 
@@ -1883,7 +1883,7 @@ export type ExportReviewHistoryCsvQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Export append-only stage review history
+ * @summary Export every append-only reviewer decision with reviewer ID and name
  */
 
 export function useExportReviewHistoryCsv<TData = Awaited<ReturnType<typeof exportReviewHistoryCsv>>, TError = ErrorType<unknown>>(

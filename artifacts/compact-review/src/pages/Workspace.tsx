@@ -260,7 +260,7 @@ export default function Workspace() {
   const exportItems = [
     ['Master candidate CSV', '/api/export/master.csv'],
     ['Final approved CSV', '/api/export/final-approved.csv'],
-    ['Review history CSV', '/api/export/review-history.csv'],
+    ['Reviewer decisions & history CSV', '/api/export/review-history.csv'],
     ['Evidence & provenance CSV', '/api/export/evidence.csv'],
   ];
   const exportData = (url: string) => {
