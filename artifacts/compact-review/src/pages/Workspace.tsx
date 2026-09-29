@@ -114,7 +114,7 @@ export default function Workspace() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [view, setView] = useState('All candidates');
-  const [filters, setFilters] = useState<Record<string, string>>({ country: 'All', stream: 'All', pillar: 'All', tier1: 'All', tier2: 'All', solution: 'All', cluster: 'All', global: 'All', regional: 'All', final: 'All', criterion: 'All', issue: 'All' });
+  const [filters, setFilters] = useState<Record<string, string>>({ country: 'All', stream: STREAMS[0], pillar: 'All', tier1: 'All', tier2: 'All', solution: 'All', cluster: 'All', global: 'All', regional: 'All', final: 'All', criterion: 'All', issue: 'All' });
   const [showFilters, setShowFilters] = useState(false);
   const [tab, setTab] = useState('Action');
   const [exportMessage, setExportMessage] = useState('');
