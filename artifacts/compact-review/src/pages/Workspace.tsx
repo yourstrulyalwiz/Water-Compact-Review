@@ -47,6 +47,29 @@ const countryCode = (c: AnyRecord) => val(c, 'country_code', 'Country_Code') || 
 const countryFullName = (c: AnyRecord) => getCountry(c) && !COUNTRIES.some(x => x.code === getCountry(c)) ? getCountry(c) : COUNTRIES.find(x => x.code === countryCode(c))?.name || getCountry(c);
 const titleOf = (c: AnyRecord) => val(c, 'reform_action_statement_english', 'standardized_candidate_reform_action', 'Reform_Action_Statement_English', 'candidate_action_english');
 const sourceExcerpt = (c: AnyRecord) => val(c, 'evidence_passage_english_translation', 'Evidence_Passage_English_Translation', 'evidence_passage_original_language', 'Evidence_Passage_Original_Language', 'source_excerpt', 'compact_form', 'Compact_Form');
+const reviewDecisionStyle = (decision: string) => {
+  const normalized = decision === 'Approve' ? 'Accept' : decision;
+  if (normalized === 'Accept') return {
+    label: normalized,
+    card: 'border-l-emerald-500 bg-emerald-50/40',
+    badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  };
+  if (normalized === 'Needs Discussion') return {
+    label: normalized,
+    card: 'border-l-amber-500 bg-amber-50/50',
+    badge: 'bg-amber-100 text-amber-800 border-amber-200',
+  };
+  if (normalized === 'Reject') return {
+    label: normalized,
+    card: 'border-l-red-500 bg-red-50/40',
+    badge: 'bg-red-100 text-red-800 border-red-200',
+  };
+  return {
+    label: normalized,
+    card: 'border-l-slate-300 bg-white',
+    badge: 'bg-slate-100 text-slate-700 border-slate-200',
+  };
+};
 const evidenceOf = (d: AnyRecord | null) => val(d, 'evidence', 'linked_evidence', 'candidate_evidence', 'anchors') as AnyRecord[] || [];
 const evidenceOriginal = (e: AnyRecord) => val(e, 'original_quote', 'verbatim_source_text', 'quote_original', 'quote_original_language', 'evidence_passage_original_language', 'Quote_Original_Language', 'Evidence_Passage_Original_Language', 'Original_Quote');
 const evidenceEnglish = (e: AnyRecord) => val(e, 'english_translation', 'translation_english', 'quote_english_translation', 'evidence_passage_english_translation', 'Quote_English_Translation', 'Evidence_Passage_English_Translation', 'English_Translation');
@@ -387,13 +410,42 @@ export default function Workspace() {
                 {candidateQaChecks.length ? candidateQaChecks.map((check, index) => <div key={val(check, 'qa_check_id', 'id') || index} className="mb-2 rounded border p-3"><div className="flex justify-between gap-2"><b className="text-xs">{val(check, 'check_name', 'name') || 'QA check'}</b><Badge variant="outline">{val(check, 'status') || 'Status unavailable'}</Badge></div>{val(check, 'detail') && <p className="mt-1 text-xs text-slate-600">{val(check, 'detail')}</p>}</div>) : <p className="text-xs text-slate-500">{qaError || (datasetId ? 'No QA checks returned for this candidate.' : 'QA checks are unavailable for the legacy dataset.')}</p>}
               </>}
               {tab === 'Relationships' && <><SectionTitle>Parent and related candidates</SectionTitle><div className="mb-3"><label className="text-[10px] font-semibold uppercase text-slate-500 block mb-1">Parent reform action</label>{val(detail, 'parent_reform_action_id', 'Parent_Reform_Action_ID') ? <button onClick={() => selectCandidate(val(detail, 'parent_reform_action_id', 'Parent_Reform_Action_ID'))} className="text-xs font-mono text-primary underline">{val(detail, 'parent_reform_action_id', 'Parent_Reform_Action_ID')}</button> : <p className="text-xs">Not provided</p>}</div>{relationships.map(r => { const other = val(r, 'target_candidate_id') === getCandidateId(detail) ? val(r, 'source_candidate_id') : val(r, 'target_candidate_id'); return <button key={val(r, 'relationship_id')} onClick={() => selectCandidate(other)} className="w-full p-3 border rounded text-left hover:bg-slate-50"><span className="text-xs font-mono font-bold text-primary underline">{other}</span><span className="block text-[10px] text-slate-500 mt-1">{val(r, 'relationship_type', 'Relationship_Type')} · {val(r, 'relationship_status', 'Relationship_Status')}</span><span className="block text-xs mt-1">{val(r, 'rationale', 'relationship_note', 'Rationale')}</span></button>; })}{!relationships.length && <p className="text-xs text-slate-500">No related candidates returned.</p>}</>}
-              {tab === 'Review history' && <><SectionTitle>Review history · {reviews.length}</SectionTitle><div className="rounded bg-amber-50 border border-amber-200 p-3 text-[11px] text-amber-900">Identity selection is not identity verification. This UI does not expose or imply authorized stage permissions.</div>{reviews.length ? reviews.map((r: AnyRecord, index: number) => <div key={val(r, 'event_id', 'review_event_id', 'review_id') || index} className="p-3 border rounded space-y-1"><div className="flex justify-between"><b className="text-xs">{val(r, 'reviewer_name', 'display_name') || (val(r, 'reviewer_id') ? `Reviewer ID ${val(r, 'reviewer_id')}` : 'Reviewer identity unavailable')}</b><Badge variant="outline">{val(r, 'stage', 'review_stage') || 'Legacy review'} · {val(r, 'decision', 'inclusion_decision')}</Badge></div><p className="text-xs text-slate-600">{val(r, 'comment', 'reviewer_comment') || 'No comment'}</p><p className="text-[10px] text-slate-400">{val(r, 'created_at', 'created_at_utc', 'occurred_at')} · revision {val(r, 'assessment_revision', 'revision') || 'unknown'} · identity unverified</p></div>) : <p className="text-xs text-slate-500">No review events recorded.</p>}</>}
+              {tab === 'Review history' && <>
+                <SectionTitle>Review history · {reviews.length}</SectionTitle>
+                <div className="rounded bg-amber-50 border border-amber-200 p-3 text-[11px] text-amber-900">Identity selection is not identity verification. This UI does not expose or imply authorized stage permissions.</div>
+                {reviews.length
+                  ? reviews.map((r: AnyRecord, index: number) => <ReviewEventCard key={val(r, 'event_id', 'review_event_id', 'review_id') || index} review={r} />)
+                  : <p className="text-xs text-slate-500">No review events recorded.</p>}
+              </>}
             </div></ScrollArea>
           </> : <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">{detailLoading ? 'Loading details…' : 'Select a candidate'}</div>}
         </Panel>
       </PanelGroup>
     </div>
   </div>;
+}
+
+function ReviewEventCard({ review }: { review: AnyRecord }) {
+  const rawDecision = String(val(review, 'decision', 'inclusion_decision') || 'Decision unavailable');
+  const style = reviewDecisionStyle(rawDecision);
+  const reviewerName = val(review, 'reviewer_name', 'display_name') ||
+    (val(review, 'reviewer_id') ? `Reviewer ID ${val(review, 'reviewer_id')}` : 'Reviewer identity unavailable');
+  const stage = val(review, 'stage', 'review_stage') || 'Legacy review';
+  const comment = val(review, 'comment', 'reviewer_comment');
+  const timestamp = val(review, 'created_at', 'created_at_utc', 'occurred_at');
+  const revision = val(review, 'assessment_revision', 'revision') || 'unknown';
+
+  return <article aria-label={`${style.label} review from ${reviewerName}`} className={`mb-2 rounded border border-l-4 p-3 space-y-2 ${style.card}`}>
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <b className="text-xs text-slate-800">{reviewerName}</b>
+        <p className="mt-0.5 text-[10px] text-slate-500">{stage} · revision {revision} · identity unverified</p>
+      </div>
+      <Badge variant="outline" className={`shrink-0 text-[10px] font-semibold ${style.badge}`}>{style.label}</Badge>
+    </div>
+    <p className="whitespace-pre-wrap break-words text-xs text-slate-600">{comment || 'No comment'}</p>
+    <p className="text-[10px] text-slate-400">{timestamp || 'Timestamp unavailable'}</p>
+  </article>;
 }
 
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: ReadonlyArray<readonly [string, string]>; onChange: (value: string) => void }) {
