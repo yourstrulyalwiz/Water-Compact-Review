@@ -6,6 +6,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Download, FileSignature, File
 import { PdfViewer } from '@/components/PdfViewer';
 import { ReviewerModal } from '@/components/ReviewerModal';
 import { ReviewDecisionForm } from '@/components/ReviewDecisionForm';
+import { ReviewEventCard, reviewEventKey } from '@/components/ReviewEventCard';
 import { useReviewer } from '@/hooks/use-reviewer';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -47,29 +48,6 @@ const countryCode = (c: AnyRecord) => val(c, 'country_code', 'Country_Code') || 
 const countryFullName = (c: AnyRecord) => getCountry(c) && !COUNTRIES.some(x => x.code === getCountry(c)) ? getCountry(c) : COUNTRIES.find(x => x.code === countryCode(c))?.name || getCountry(c);
 const titleOf = (c: AnyRecord) => val(c, 'reform_action_statement_english', 'standardized_candidate_reform_action', 'Reform_Action_Statement_English', 'candidate_action_english');
 const sourceExcerpt = (c: AnyRecord) => val(c, 'evidence_passage_english_translation', 'Evidence_Passage_English_Translation', 'evidence_passage_original_language', 'Evidence_Passage_Original_Language', 'source_excerpt', 'compact_form', 'Compact_Form');
-const reviewDecisionStyle = (decision: string) => {
-  const normalized = decision === 'Approve' ? 'Accept' : decision;
-  if (normalized === 'Accept') return {
-    label: normalized,
-    card: 'border-l-emerald-500 bg-emerald-50/40',
-    badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  };
-  if (normalized === 'Needs Discussion') return {
-    label: normalized,
-    card: 'border-l-amber-500 bg-amber-50/50',
-    badge: 'bg-amber-100 text-amber-800 border-amber-200',
-  };
-  if (normalized === 'Reject') return {
-    label: normalized,
-    card: 'border-l-red-500 bg-red-50/40',
-    badge: 'bg-red-100 text-red-800 border-red-200',
-  };
-  return {
-    label: normalized,
-    card: 'border-l-slate-300 bg-white',
-    badge: 'bg-slate-100 text-slate-700 border-slate-200',
-  };
-};
 const evidenceOf = (d: AnyRecord | null) => val(d, 'evidence', 'linked_evidence', 'candidate_evidence', 'anchors') as AnyRecord[] || [];
 const evidenceOriginal = (e: AnyRecord) => val(e, 'original_quote', 'verbatim_source_text', 'quote_original', 'quote_original_language', 'evidence_passage_original_language', 'Quote_Original_Language', 'Evidence_Passage_Original_Language', 'Original_Quote');
 const evidenceEnglish = (e: AnyRecord) => val(e, 'english_translation', 'translation_english', 'quote_english_translation', 'evidence_passage_english_translation', 'Quote_English_Translation', 'Evidence_Passage_English_Translation', 'English_Translation');
@@ -414,7 +392,7 @@ export default function Workspace() {
                 <SectionTitle>Review history · {reviews.length}</SectionTitle>
                 <div className="rounded bg-amber-50 border border-amber-200 p-3 text-[11px] text-amber-900">Identity selection is not identity verification. This UI does not expose or imply authorized stage permissions.</div>
                 {reviews.length
-                  ? reviews.map((r: AnyRecord, index: number) => <ReviewEventCard key={val(r, 'event_id', 'review_event_id', 'review_id') || index} review={r} />)
+                  ? reviews.map((r: AnyRecord, index: number) => <ReviewEventCard key={reviewEventKey(r, index)} review={r} />)
                   : <p className="text-xs text-slate-500">No review events recorded.</p>}
               </>}
             </div></ScrollArea>
@@ -423,29 +401,6 @@ export default function Workspace() {
       </PanelGroup>
     </div>
   </div>;
-}
-
-function ReviewEventCard({ review }: { review: AnyRecord }) {
-  const rawDecision = String(val(review, 'decision', 'inclusion_decision') || 'Decision unavailable');
-  const style = reviewDecisionStyle(rawDecision);
-  const reviewerName = val(review, 'reviewer_name', 'display_name') ||
-    (val(review, 'reviewer_id') ? `Reviewer ID ${val(review, 'reviewer_id')}` : 'Reviewer identity unavailable');
-  const stage = val(review, 'stage', 'review_stage') || 'Legacy review';
-  const comment = val(review, 'comment', 'reviewer_comment');
-  const timestamp = val(review, 'created_at', 'created_at_utc', 'occurred_at');
-  const revision = val(review, 'assessment_revision', 'revision') || 'unknown';
-
-  return <article aria-label={`${style.label} review from ${reviewerName}`} className={`mb-2 rounded border border-l-4 p-3 space-y-2 ${style.card}`}>
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <b className="text-xs text-slate-800">{reviewerName}</b>
-        <p className="mt-0.5 text-[10px] text-slate-500">{stage} · revision {revision}</p>
-      </div>
-      <Badge variant="outline" className={`shrink-0 text-[10px] font-semibold ${style.badge}`}>{style.label}</Badge>
-    </div>
-    <p className="whitespace-pre-wrap break-words text-xs text-slate-600">{comment || 'No comment'}</p>
-    <p className="text-[10px] text-slate-400">{timestamp || 'Timestamp unavailable'}</p>
-  </article>;
 }
 
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: ReadonlyArray<readonly [string, string]>; onChange: (value: string) => void }) {

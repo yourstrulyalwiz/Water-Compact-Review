@@ -1,14 +1,6 @@
 import { useState } from 'react';
+import { ReviewEventCard, reviewEventKey, type ReviewEvent } from '@/components/ReviewEventCard';
 import type { ReviewerIdentity } from '@/hooks/use-reviewer';
-
-type ReviewEvent = {
-  reviewer_id?: string;
-  stage?: string;
-  decision?: string;
-  comment?: string | null;
-  assessment_revision?: number;
-  created_at?: string;
-};
 
 const decisions = [
   { label: 'Accept', value: 'Approve' },
@@ -96,5 +88,11 @@ export function ReviewDecisionForm({
       </form>}
     {message && <p role="status" className="text-xs text-emerald-800">{message}</p>}
     {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+    <div className="border-t border-slate-200 pt-3">
+      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Reviewer decisions · {reviews.length}</h4>
+      {reviews.length
+        ? reviews.map((review, index) => <ReviewEventCard key={reviewEventKey(review, index)} review={review} />)
+        : <p className="text-xs text-slate-500">No review history yet.</p>}
+    </div>
   </section>;
 }
