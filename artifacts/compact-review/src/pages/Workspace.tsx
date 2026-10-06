@@ -313,7 +313,7 @@ export default function Workspace() {
       <div className="text-xs text-muted-foreground font-mono hidden md:block">{allCandidates.length ? `${stats?.total_candidates ?? allCandidates.length} candidates · ${stats?.total_evidence ?? stats?.total_anchors ?? '—'} evidence passages · ${stats?.total_documents ?? '—'} documents` : 'Loading dataset…'}</div>
       <div className="flex items-center gap-3">
         <div className="relative group"><button className="flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1.5 hover:bg-muted"><Download className="w-3.5 h-3.5" />Exports</button><div className="hidden group-hover:block focus-within:block absolute right-0 top-full z-50 bg-card border rounded-md shadow-lg p-1 min-w-48">{exportItems.map(([label, url]) => <button key={url} onClick={() => exportData(url)} className="block w-full text-left text-xs px-3 py-2 rounded hover:bg-muted">{label}</button>)}</div></div>
-        {reviewer ? <div className="flex items-center gap-1.5 text-xs border rounded-full px-2.5 py-1 bg-slate-50"><User className="w-3.5 h-3.5 text-slate-500" /><span className="font-medium max-w-[100px] truncate">{reviewer.display_name}</span><span className="text-[9px] text-amber-700 border-l pl-1.5">name selection · unverified</span><button onClick={() => { logout(); setShowReviewerModal(true); }} className="text-slate-400 hover:text-slate-600 ml-1 text-[10px] underline">Switch</button></div> : <button onClick={() => setShowReviewerModal(true)} className="text-xs text-primary hover:underline font-medium">Select reviewer name</button>}
+        {reviewer ? <div className="flex items-center gap-1.5 text-xs border rounded-full px-2.5 py-1 bg-slate-50"><User className="w-3.5 h-3.5 text-slate-500" /><span className="font-medium max-w-[100px] truncate">{reviewer.display_name}</span><button onClick={() => { logout(); setShowReviewerModal(true); }} className="text-slate-400 hover:text-slate-600 ml-1 text-[10px] underline">Switch</button></div> : <button onClick={() => setShowReviewerModal(true)} className="text-xs text-primary hover:underline font-medium">Select reviewer name</button>}
       </div>
     </header>
     {exportMessage && <div role="status" className="absolute z-50 top-14 right-4 rounded bg-slate-900 text-white px-3 py-2 text-xs shadow">{exportMessage}<button className="ml-3 underline" onClick={() => setExportMessage('')}>Dismiss</button></div>}
@@ -439,7 +439,7 @@ function ReviewEventCard({ review }: { review: AnyRecord }) {
     <div className="flex items-start justify-between gap-3">
       <div>
         <b className="text-xs text-slate-800">{reviewerName}</b>
-        <p className="mt-0.5 text-[10px] text-slate-500">{stage} · revision {revision} · identity unverified</p>
+        <p className="mt-0.5 text-[10px] text-slate-500">{stage} · revision {revision}</p>
       </div>
       <Badge variant="outline" className={`shrink-0 text-[10px] font-semibold ${style.badge}`}>{style.label}</Badge>
     </div>
