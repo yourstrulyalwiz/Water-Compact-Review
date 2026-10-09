@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ReviewEventCard, reviewEventKey, type ReviewEvent } from '@/components/ReviewEventCard';
 import type { ReviewerIdentity } from '@/hooks/use-reviewer';
 
@@ -9,20 +9,23 @@ const decisions = [
 ] as const;
 
 export function ReviewDecisionForm({
-  candidateId, revision, reviewer, reviews, onSelectReviewer, onSaved,
+  candidateId, revision, reviewer, reviews, onSelectReviewer, onRenewSession, onSaved,
 }: {
   candidateId: string;
   revision: number;
   reviewer: ReviewerIdentity | null;
   reviews: ReviewEvent[];
   onSelectReviewer: () => void;
-  onSaved: () => Promise<void>;
+  onRenewSession: (identity: ReviewerIdentity) => Promise<ReviewerIdentity>;
+  onSaved: (review: ReviewEvent) => void;
 }) {
   const [decision, setDecision] = useState('');
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [needsReviewerSelection, setNeedsReviewerSelection] = useState(false);
+  const inFlight = useRef(false);
   const latest = [...reviews].reverse().find(
     event => event.stage === 'Global' &&
       event.reviewer_id === reviewer?.reviewer_id &&
@@ -31,36 +34,50 @@ export function ReviewDecisionForm({
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!reviewer || !decision || !Number.isInteger(revision) || revision < 1) return;
+    if (inFlight.current || !reviewer || !decision || !Number.isInteger(revision) || revision < 1) return;
+    inFlight.current = true;
     setSaving(true);
     setError('');
+    setNeedsReviewerSelection(false);
     setMessage('');
     try {
-      const response = await fetch(`/api/candidates/${encodeURIComponent(candidateId)}/reviews`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${reviewer.token}` },
-        body: JSON.stringify({
-          stage: 'Global',
-          decision,
-          comment: comment.trim() || null,
-          expected_assessment_revision: revision,
-        }),
+      const body = JSON.stringify({
+        stage: 'Global',
+        decision,
+        comment: comment.trim() || null,
+        expected_assessment_revision: revision,
       });
+      const sendReview = (token: string) => fetch(`/api/candidates/${encodeURIComponent(candidateId)}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body,
+      });
+      let response = await sendReview(reviewer.token);
+      // A 401 is rejected before insertion. Only that explicit failure is
+      // retried; network failures and other statuses could have written data.
+      if (response.status === 401) {
+        setNeedsReviewerSelection(true);
+        const renewed = await onRenewSession(reviewer);
+        response = await sendReview(renewed.token);
+        setNeedsReviewerSelection(response.status === 401);
+      }
       if (!response.ok) {
         const body = await response.json().catch(() => ({})) as { error?: string };
         throw new Error(response.status === 401
-          ? 'Reviewer selection has expired. Select your name again.'
+          ? 'Your reviewer session could not be restored. Your draft has been kept. Select your name again and retry.'
           : response.status === 409
             ? 'This assessment changed. Reload the page before reviewing it.'
             : body.error || `Review could not be saved (${response.status}).`);
       }
+      const savedReview = await response.json() as ReviewEvent;
+      onSaved(savedReview);
       setDecision('');
       setComment('');
       setMessage('Review saved to history. This is not a final approval.');
-      await onSaved();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Review could not be saved.');
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   }
@@ -87,7 +104,10 @@ export function ReviewDecisionForm({
         </fieldset>
       </form>}
     {message && <p role="status" className="text-xs text-emerald-800">{message}</p>}
-    {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+    {error && <div role="alert" className="space-y-2 text-xs text-red-700">
+      <p>{error}</p>
+      {needsReviewerSelection && <button type="button" onClick={onSelectReviewer} className="underline font-semibold">Select reviewer again</button>}
+    </div>}
     <div className="border-t border-slate-200 pt-3">
       <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Reviewer decisions · {reviews.length}</h4>
       {reviews.length

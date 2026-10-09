@@ -1,3 +1,4 @@
 - [Managed Publish and secondary schemas](managed-publish-secondary-schema.md) — a development-only secondary schema did not appear in the production Publish diff; verify before rollout.
 - [Prefixed workbook compatibility](prefixed-workbook-compatibility.md) — the source spreadsheets use prefixed SpreadsheetML that common Excel readers reject; preserve the original files.
 - [Local publish-build reproduction](local-publish-build.md) — shell builds do not receive service-provided environment variables; pass the configured port explicitly.
+- [Private deployment health checks](private-deployment-health.md) — an HTTP 200 after redirects can be the Replit login page, not evidence that the published app is healthy.

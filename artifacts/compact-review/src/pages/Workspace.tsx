@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useLocation, useSearch } from 'wouter';
@@ -6,7 +6,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Download, FileSignature, File
 import { PdfViewer } from '@/components/PdfViewer';
 import { ReviewerModal } from '@/components/ReviewerModal';
 import { ReviewDecisionForm } from '@/components/ReviewDecisionForm';
-import { ReviewEventCard, reviewEventKey } from '@/components/ReviewEventCard';
+import { ReviewEventCard, reviewEventKey, type ReviewEvent } from '@/components/ReviewEventCard';
 import { useReviewer } from '@/hooks/use-reviewer';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -99,7 +99,7 @@ export default function Workspace() {
   const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(useSearch());
   const selectedId = searchParams.get('id');
-  const { reviewer, login, logout } = useReviewer();
+  const { reviewer, login, logout, renewSession } = useReviewer();
   const [showReviewerModal, setShowReviewerModal] = useState(!reviewer);
   const [allCandidates, setAllCandidates] = useState<AnyRecord[]>([]);
   const [detail, setDetail] = useState<AnyRecord | null>(null);
@@ -119,20 +119,43 @@ export default function Workspace() {
   const [showFilters, setShowFilters] = useState(false);
   const [tab, setTab] = useState('Action');
   const [exportMessage, setExportMessage] = useState('');
+  const historyRequests = useRef<Record<string, number>>({});
 
-  const refreshAfterReview = async (candidateId: string) => {
-    try {
-      const [updated, list] = await Promise.all([
-        readJson<any>(`/api/candidates/${encodeURIComponent(candidateId)}`),
-        readJson<any>('/api/candidates?limit=500'),
-      ]);
-      const updatedDetail = flattenCandidate(updated?.candidate ?? updated?.detail ?? updated);
-      setDetail(current => current && getCandidateId(current) === candidateId ? updatedDetail : current);
-      const rows = Array.isArray(list) ? list : list?.candidates ?? list?.items ?? [];
-      setAllCandidates(rows.map(flattenCandidate));
-    } catch {
-      setError('Review saved, but the page could not refresh. Reload to see the updated history.');
-    }
+  const recordSavedReview = (candidateId: string, savedReview: ReviewEvent) => {
+    // Individual opinions do not alter assessments, evidence, or stage status.
+    // Patch just the history instead of refetching/replacing the workspace.
+    setDetail(current => {
+      if (!current || getCandidateId(current) !== candidateId) return current;
+      const events: ReviewEvent[] = Array.isArray(current.review_events) ? current.review_events :
+        Array.isArray(current.reviews) ? current.reviews : Array.isArray(current.events) ? current.events : [];
+      const savedKey = reviewEventKey(savedReview, 0);
+      const exists = events.some((event, index) => reviewEventKey(event, index) === savedKey);
+      return { ...current, review_events: exists ? events : [...events, savedReview] };
+    });
+    // Refresh only shared history and its disagreement flag in the background.
+    // Keep the form, evidence, selected candidate, and scroll containers mounted.
+    const request = (historyRequests.current[candidateId] ?? 0) + 1;
+    historyRequests.current[candidateId] = request;
+    void readJson<{ events: ReviewEvent[]; has_unresolved_disagreement: boolean }>(
+      `/api/candidates/${encodeURIComponent(candidateId)}/reviews`,
+    ).then(history => {
+      if (historyRequests.current[candidateId] !== request) return;
+      if (!Array.isArray(history.events)) throw new Error('Invalid review history response');
+      setDetail(current => {
+        if (!current || getCandidateId(current) !== candidateId) return current;
+        const events = new Map(history.events.map((event, index) => [reviewEventKey(event, index), event]));
+        for (const [index, event] of (current.review_events as ReviewEvent[] ?? []).entries()) {
+          if (!events.has(reviewEventKey(event, index))) events.set(reviewEventKey(event, index), event);
+        }
+        return { ...current, review_events: [...events.values()], has_unresolved_disagreement: history.has_unresolved_disagreement };
+      });
+      setAllCandidates(current => current.map(candidate => getCandidateId(candidate) === candidateId
+        ? { ...candidate, has_unresolved_disagreement: history.has_unresolved_disagreement } : candidate));
+    }).catch(() => {
+      if (historyRequests.current[candidateId] === request) {
+        setError('Your review is saved. The latest shared history could not be loaded; your response is still shown below.');
+      }
+    });
   };
 
   useEffect(() => {
@@ -361,7 +384,7 @@ export default function Workspace() {
                   <Field label="Secondary domains" value={arrayText(val(detail, 'secondary_reform_domain_tags', 'additional_domain_tags', 'secondary_domains', 'Secondary_Reform_Domain_Tags'))} />
                   <Field label="Scalable solutions" value={arrayText([val(detail, 'primary_scalable_solution', 'Primary_Scalable_Solution'), ...tagValues(val(detail, 'additional_scalable_solutions', 'Additional_Scalable_Solutions'))])} />
                 </section>
-                {datasetId && <ReviewDecisionForm key={`${getCandidateId(detail)}-${reviewer?.reviewer_id || 'guest'}`} candidateId={String(getCandidateId(detail))} revision={Number(val(detail, 'assessment_revision', 'current_assessment_revision'))} reviewer={reviewer} reviews={reviews} onSelectReviewer={() => setShowReviewerModal(true)} onSaved={() => refreshAfterReview(String(getCandidateId(detail)))} />}
+                {datasetId && <ReviewDecisionForm key={`${getCandidateId(detail)}-${reviewer?.reviewer_id || 'guest'}`} candidateId={String(getCandidateId(detail))} revision={Number(val(detail, 'assessment_revision', 'current_assessment_revision'))} reviewer={reviewer} reviews={reviews} onSelectReviewer={() => setShowReviewerModal(true)} onRenewSession={renewSession} onSaved={savedReview => recordSavedReview(String(getCandidateId(detail)), savedReview)} />}
                 <section><SectionTitle>Stage status · not configured</SectionTitle>
                   <p className="text-xs text-slate-600">Reviewer names are prototype attribution only, not verified identity. Stage assignments and verified permission enforcement are not configured; no authoritative Global or Regional decision can be submitted here.</p>
                   <div className="grid grid-cols-2 gap-2 mt-2"><Field label="Global decision" value={currentDecision} /><Field label="Regional confirmation" value={regionalDecision} /></div>
