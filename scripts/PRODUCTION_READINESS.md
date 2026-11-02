@@ -40,9 +40,11 @@ Read-only desktop test; guest mode, all POSTs blocked, no reviews submitted:
 - All sampled documents displayed successful SHA256 verification.
 - Existing SLE-RA-018 details and its page-10 PDF rendered.
 - Uzbekistan UZB-RA-023 landscape page 7 rendered at both scales with its manual
-  transcription/region status preserved. The exact manual-region boundary was
-  not visually separable from the infographic: alignment remains unconfirmed,
-  not certified as native-text alignment.
+  transcription/region status preserved. A focused follow-up confirmed that the
+  overlay covers the supplied phrase and matches its normalized coordinates at
+  both scales (rounding differences below 0.03 CSS pixels). Its 30%-opacity
+  amber multiply fill has low contrast against the infographic, but it is not
+  missing or misaligned. No UI or source-geometry change is needed.
 - Non-blocking PDF font warning: `TT: undefined function: 21`.
 
 ## Remaining gates, in order
@@ -63,14 +65,23 @@ Read-only desktop test; guest mode, all POSTs blocked, no reviews submitted:
    817 candidates, 242 unchanged review events, all predecessor rows preserved,
    active dataset unchanged. This was NOT a production migration or append.
    Refresh the backup before the eventual live change if reviews have advanced.
-2. **Review the actual Publish schema diff:** it must include the narrowly scoped
-   country/pattern changes and multiple-batch support, without replacing data,
-   dropping source/review tables, or changing the active dataset. The actual diff
-   has NOT been inspected. If secondary-schema changes are omitted, stop and
-   resolve the supported migration route; no startup/build/custom production DDL.
-3. **Resolve Uzbekistan visual acceptance:** compare the supplied manual geometry
-   with the displayed image region before certifying exact highlight alignment.
-   Do not rewrite authoritative source geometry without approval.
+2. **Publish schema diff — BLOCKED:** the platform's read-only diff check returned
+   success, `hasDiff: false`, no SQL statements and no destructive-change warnings.
+   Fresh SELECT queries against development and production nevertheless show:
+   - Development has two append provenance columns; production has neither.
+   - Development permits all 14 countries and candidate prefixes; production's
+     three country checks and candidate-ID pattern still permit only four.
+   - Production retains `UNIQUE(dataset_id)` on import batches; development
+     instead has the unique `(dataset_id,batch_key)` index and checksum check.
+   Thus the empty proposed diff is not evidence of matching schemas. The cause
+   of the missing `compact_v5` changes has not been established. Do not publish
+   expecting this check to migrate them, use data overwrite, or substitute
+   startup/build/custom production DDL. Resolve the managed schema-detection
+   discrepancy before rollout, with Replit Support if needed.
+   Evidence is saved in `generated-artifacts/append-tests/publish-schema-check.json`.
+3. **Uzbekistan visual acceptance — PASSED:** the focused browser inspection
+   confirmed manual-region alignment at both zoom levels. No persistent changes
+   were made. This is manual image geometry, not native PDF text matching.
 4. **Publish and authenticated smoke tests:** only after approval, publish the
    compatible code/assets and supported schema diff. Check original-country
    operation and production PDF bytes/hashes using authorized access.
