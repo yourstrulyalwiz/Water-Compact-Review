@@ -79,6 +79,18 @@ Read-only desktop test; guest mode, all POSTs blocked, no reviews submitted:
    startup/build/custom production DDL. Resolve the managed schema-detection
    discrepancy before rollout, with Replit Support if needed.
    Evidence is saved in `generated-artifacts/append-tests/publish-schema-check.json`.
+   A further read-only comparison checked columns, constraints and indexes in
+   both application schemas: all 10 object differences were in `compact_v5`;
+   none were in `public`. Both schemas were accessible to the SQL inspection
+   connections. The installed local Drizzle implementation defaults its schema
+   filter to `public`, making schema scope a concrete hypothesis, not proof of
+   the managed publisher's internal configuration.
+   An explicit temporary `schemaFilter: ["public", "compact_v5"]` in the local
+   Drizzle config did not change the managed comparison: it still returned no
+   statements. The temporary setting was removed; no schema push was run.
+   No verified repository-only fix was established. The platform comparison
+   needs investigation specifically for inclusion of `compact_v5`, rather than
+   another unchanged republish or removal of the importer's prerequisites.
 3. **Uzbekistan visual acceptance — PASSED:** the focused browser inspection
    confirmed manual-region alignment at both zoom levels. No persistent changes
    were made. This is manual image geometry, not native PDF text matching.
