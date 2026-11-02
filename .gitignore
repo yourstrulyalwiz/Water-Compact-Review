@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+/generated-artifacts/
+/source_package/append-20261020/
+/source_package/documents/v5/append-20261020/

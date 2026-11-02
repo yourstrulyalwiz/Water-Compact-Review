@@ -3,3 +3,5 @@
 
 # No need to store the pnpm store twice.
 .local
+/generated-artifacts/
+/source_package/append-20261020/

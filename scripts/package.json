@@ -5,6 +5,12 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "compact:v5:append:validate": "tsx ./src/compact-v5-append.ts validate",
+    "compact:v5:append:plan": "tsx ./src/compact-v5-append.ts plan",
+    "compact:v5:append:prepare": "tsx ./src/compact-v5-append.ts prepare",
+    "compact:v5:append:apply": "tsx ./src/compact-v5-append.ts apply",
+    "compact:v5:append:verify": "tsx ./src/compact-v5-append.ts verify",
+    "compact:v5:append:restore": "tsx ./src/compact-v5-append.ts restore",
     "compact:v5:validate": "tsx ./src/compact-v5-validate.ts",
     "compact:v5:import": "tsx ./src/compact-v5-import.ts",
     "compact:v5:activate": "tsx ./src/compact-v5-activate.ts",
@@ -12,6 +18,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@google-cloud/storage": "^8.4.0",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.2",
     "pdfjs-dist": "^4.4.168",

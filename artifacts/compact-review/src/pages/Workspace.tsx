@@ -8,6 +8,7 @@ import { ReviewerModal } from '@/components/ReviewerModal';
 import { ReviewDecisionForm } from '@/components/ReviewDecisionForm';
 import { ReviewEventCard, reviewEventKey, type ReviewEvent } from '@/components/ReviewEventCard';
 import { useReviewer } from '@/hooks/use-reviewer';
+import { loadAllCandidates } from '@/lib/load-all-candidates';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -163,7 +164,7 @@ export default function Workspace() {
     setLoading(true);
     let qaLoadError = '';
     Promise.all([
-      readJson<any>('/api/candidates?limit=500'),
+      loadAllCandidates(readJson),
       readJson<any>('/api/stats').catch(() => null),
       readJson<any>('/api/qa-checks').catch(e => { qaLoadError = e.message || 'Unable to load QA checks'; return []; }),
     ]).then(([candidateResponse, statsResponse, qaResponse]) => {

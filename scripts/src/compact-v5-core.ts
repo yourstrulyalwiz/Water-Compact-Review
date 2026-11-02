@@ -817,6 +817,14 @@ export function openDatabase(): Pool {
   return new Pool({ connectionString: requireDatabaseUrl(), max: 3, application_name: "compact-v5-import-cli" });
 }
 
+async function rejectExpandedDataset(client: PoolClient, datasetId: string): Promise<void> {
+  const batches = await client.query(
+    'SELECT count(*)::int AS n FROM compact_v5.import_batches WHERE dataset_id=$1', [datasetId]);
+  if (Number(batches.rows[0]?.n) > 1) {
+    throw new Error('This dataset contains append batches. Use compact:v5:append:plan/verify; baseline tools cannot modify or verify expanded datasets.');
+  }
+}
+
 function plainRows(file: WorkbookData, sheet: string): Record<string, unknown>[] {
   return (file.sheets[sheet] ?? []).map((row) => row.values);
 }
@@ -869,6 +877,7 @@ export async function stagePackage(validation: ValidationResult): Promise<{ resu
   const client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+    await rejectExpandedDataset(client, validation.datasetId);
     const existing = await client.query(
       "SELECT d.source_fingerprint, d.status, b.batch_id FROM compact_v5.datasets d JOIN compact_v5.import_batches b USING (dataset_id) WHERE d.dataset_id = $1 FOR UPDATE",
       [validation.datasetId],
@@ -1097,6 +1106,7 @@ export async function verifyDataset(datasetId: string, writeVerification: boolea
   const pool = openDatabase();
   const client = await pool.connect();
   try {
+    await rejectExpandedDataset(client, datasetId);
     const counts: Record<string, number> = {};
     for (const [table, expected] of Object.entries(EXPECTED_COUNTS)) {
       const result = await client.query(
@@ -1185,6 +1195,8 @@ export async function activateDataset(datasetId: string): Promise<{ previous: st
     );
     if (!state.rowCount) throw new Error("compact_v5.dataset_state is missing; apply migration 003 first");
     const previous = state.rows[0].active_dataset_id as string | null;
+    if (previous) await rejectExpandedDataset(client, previous);
+    if (datasetId.toLowerCase() !== "legacy") await rejectExpandedDataset(client, datasetId);
     if (datasetId.toLowerCase() === "legacy") {
       await client.query("UPDATE compact_v5.dataset_state SET previous_active_dataset_id = active_dataset_id, active_dataset_id = NULL, changed_at = now() WHERE singleton = true");
       if (previous) await client.query("UPDATE compact_v5.datasets SET status = 'archived' WHERE dataset_id = $1 AND status = 'active'", [previous]);
