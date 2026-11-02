@@ -114,4 +114,6 @@ disposable localhost PostgreSQL database on port 55432 named `compact_append_tes
 Restore a fresh development fixture there and apply migration 004 before running:
 `cd scripts && pnpm exec tsx src/append/append.test.ts`.
 Never point it at production. Full interactive highlight review and the production
-backup/migration/apply steps remain operator acceptance gates.
+schema-diff approval and production apply remain operator acceptance gates.
+The real-production backup restore and append rehearsal subsequently passed;
+see `PRODUCTION_READINESS.md` for the evidence and remaining visual check.

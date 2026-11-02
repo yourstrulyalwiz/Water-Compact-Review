@@ -3,3 +3,4 @@
 - [Local publish-build reproduction](local-publish-build.md) — shell builds do not receive service-provided environment variables; pass the configured port explicitly.
 - [Private deployment health checks](private-deployment-health.md) — an HTTP 200 after redirects can be the Replit login page, not evidence that the published app is healthy.
 - [Compact append scope](compact-append-scope.md) — new compacts must preserve the existing UI and production review entries.
+- [Production backup interface](production-backup-interface.md) — backup settings were absent for this user; do not assume the documented backup UI is available.

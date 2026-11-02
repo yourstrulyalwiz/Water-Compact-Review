@@ -47,13 +47,22 @@ Read-only desktop test; guest mode, all POSTs blocked, no reviews submitted:
 
 ## Remaining gates, in order
 
-1. **Production backup and restore evidence:** obtain an all-schema production
-   backup, retain it privately, and restore it in an isolated database. Verify
-   the review tables and source tables in that restore. This has NOT been done;
-   the available production SQL callback is read-only and is not a backup or
-   restore facility. The earlier restore test used development data only.
-   Use the Database tool's supported production backup/export facilities or an
-   approved operator connection for pg_dump; never paste credentials into chat.
+1. **Production backup and restore evidence — PASSED:** a snapshot-consistent
+   production dump was captured at 2026-11-02 17:06 UTC using the separately
+   supplied backup secret with read-only source sessions. The dump, full-row
+   inventory and schema inventory are archived in private App Storage under
+   `.private/production-backups/2026-11-02T17-06-05-610Z/`.
+   The downloaded dump matched its SHA256 and restored successfully into a
+   localhost-only disposable PostgreSQL database. Full-row inventories matched
+   exactly across all 33 tables, including all 242 review events; columns,
+   constraints, user triggers and functions also matched. Role ownership and
+   grants were excluded from the local restore and are not certified by it.
+   The local private report is
+   `generated-artifacts/production-backups/2026-11-02T17-06-05-610Z/report.json`.
+   A subsequent append rehearsal on that restored production copy also passed:
+   817 candidates, 242 unchanged review events, all predecessor rows preserved,
+   active dataset unchanged. This was NOT a production migration or append.
+   Refresh the backup before the eventual live change if reviews have advanced.
 2. **Review the actual Publish schema diff:** it must include the narrowly scoped
    country/pattern changes and multiple-batch support, without replacing data,
    dropping source/review tables, or changing the active dataset. The actual diff
@@ -71,3 +80,10 @@ Read-only desktop test; guest mode, all POSTs blocked, no reviews submitted:
    preservation and the exact added batch inventory.
 
 See `COMPACT_APPEND.md` for commands and package recovery instructions.
+
+Backup check implementation: `scripts/src/append/backup-readiness.ts`.
+It expects a fresh, separate localhost PostgreSQL server on port 55433 with the
+`postgres` role; initialize that disposable server with `initdb -U postgres`.
+Never substitute a production connection for its literal restore destination.
+It deliberately refuses unexpected production identity or an existing local
+recovery database. It is not part of application startup or publishing.
