@@ -18,3 +18,9 @@ that local setting as a verified fix for this project's managed publishing path.
 **Why:** Publishing code under that assumption would leave the new dataset unavailable while the existing production records remain in place. Choosing a development-data overwrite instead would put those records at risk.
 
 **How to apply:** For future production rollouts involving non-public schemas, verify an explicitly non-destructive publish plan and preserve the legacy production data. Do not substitute a deploy-build, startup migration, or direct production DDL for a missing managed schema diff.
+
+The user clarified that a project-level Publish-only instruction must not prevent preparing another supported procedure, without overriding actual Replit platform restrictions.
+
+**Why:** Agent restrictions on direct managed-production DDL do not establish that an owner-operated SQL route is technically unavailable. Public documentation describes owner production editing, but the exact migration procedure and later Publish reconciliation still need verification.
+
+**How to apply:** Distinguish repository conventions, Agent/tool permissions, and owner capabilities. Do not claim the platform makes every manual route impossible, and do not present an unverified owner procedure as supported.
