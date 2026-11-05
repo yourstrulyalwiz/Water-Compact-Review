@@ -26,6 +26,28 @@ tags:
     description: Candidate review decisions
 
 paths:
+  /append-readiness/october-2026:
+    get:
+      operationId: getOctoberAppendReadiness
+      tags: [documents]
+      summary: Verify the ten bundled October PDFs without reading or changing the database
+      description: Uses the same deployment access boundary as other read-only document endpoints. Checks only a fixed manifest; accepts no paths or database inputs.
+      responses:
+        "200":
+          description: All ten deployed PDF hashes match the pinned package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OctoberAssetReadiness"
+        "503":
+          description: At least one bundled PDF is unavailable or does not match
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OctoberAssetReadiness"
+        "429":
+          description: Too many asset checks; retry after the indicated interval
+
   /healthz:
     get:
       operationId: healthCheck
@@ -608,6 +630,33 @@ components:
       scheme: bearer
       bearerFormat: ReviewerToken
   schemas:
+    OctoberPdfAsset:
+      type: object
+      required: [document_id, country_code, expected_sha256, actual_sha256, byte_size, status]
+      properties:
+        document_id: { type: string }
+        country_code: { type: string }
+        expected_sha256: { type: string }
+        actual_sha256: { type: ["string", "null"] }
+        byte_size: { type: ["integer", "null"] }
+        status: { type: string, enum: [verified, missing, hash_mismatch, unreadable] }
+    OctoberAssetReadiness:
+      type: object
+      required: [ready, read_only, database_accessed, checked_at, batch_key, package_sha256, asset_location, expected_documents, verified_documents, documents]
+      properties:
+        ready: { type: boolean }
+        read_only: { type: boolean }
+        database_accessed: { type: boolean }
+        checked_at: { type: string, format: date-time }
+        batch_key: { type: string }
+        package_sha256: { type: string }
+        asset_location: { type: string, enum: [bundled-documents] }
+        expected_documents: { type: integer }
+        verified_documents: { type: integer }
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/OctoberPdfAsset"
     HealthStatus:
       type: object
       required: [status]

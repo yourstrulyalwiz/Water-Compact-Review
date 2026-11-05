@@ -99,6 +99,13 @@ production documents route receive a Replit sign-in redirect. Do not treat the
 build log, workspace PDF checks, or login HTML as a deployed-PDF hash check.
 See `PRODUCTION_APPEND_OPERATOR_CHECKS.md` for current evidence and owner commands.
 
+The read-only `/api/append-readiness/october-2026` endpoint is now implemented
+and locally verified against all ten bundled PDF hashes, independently of database
+document rows. After publishing, use an authorized production browser to check
+`ready: true` and `verified_documents: 10` with the pinned batch/package fingerprint.
+Until that production result is obtained, the local endpoint result does not
+resolve the production asset gate. The endpoint never triggers an import.
+
 1. Confirm the deployed database/schema and API use the same active dataset.
 2. Take an all-schema recoverable backup and test a restore in isolation; keep
    an access-controlled review export. Development restore tests are not a

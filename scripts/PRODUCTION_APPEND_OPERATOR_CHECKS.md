@@ -38,6 +38,43 @@ triggers, replace data, activate another dataset, or add build/startup migration
 
 ## 1. Select the production connection
 
+### Confirm the deployed October PDFs before any append
+
+Publish the current code/assets **without overwriting production data**. This
+adds only a read-only diagnostic route; it does not append data or migrate schema.
+Then, in a browser signed in with access to the private production app, open:
+
+`https://water-compact-review.replit.app/api/append-readiness/october-2026`
+
+Acceptance requires HTTP 200 and the following JSON values:
+
+```json
+{
+  "ready": true,
+  "read_only": true,
+  "database_accessed": false,
+  "batch_key": "water-compacts-append-20261020-ten-countries-v1",
+  "package_sha256": "70c2790c3fc07527eb8beac1062000a464d9e41547cd4a128018cf10f41e06e3",
+  "asset_location": "bundled-documents",
+  "expected_documents": 10,
+  "verified_documents": 10
+}
+```
+
+The complete response also includes the check time and ten document results,
+each with `status: "verified"` and identical expected/actual SHA256 values.
+It reads only `dist/documents/v5/append-20261020/` on the serving machine, so it
+works before document rows are imported and cannot conceal missing deployment
+files by reading workspace copies. It does not query the database or return PDF
+contents, review data, absolute paths, or credentials. It inherits the existing
+private deployment boundary and is limited to six checks per minute per IP.
+No reviewer token needs to be placed in a URL.
+
+A 503 report with `ready: false`, a missing/corrupt/unreadable document, a 404,
+a sign-in page, or a development-preview result does NOT satisfy this production
+gate. A 429 means wait a minute before retrying. Opening this URL never performs
+the append. Copy the JSON result back for confirmation before continuing.
+
 In Replit: Tools → Database → select **Production** → My Data → SQL console.
 For an external PostgreSQL client, obtain connection details from the selected
 Production database, not the development database. Keep credentials out of chat,

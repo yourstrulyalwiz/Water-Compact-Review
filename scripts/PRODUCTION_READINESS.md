@@ -36,6 +36,14 @@ The remaining gate is authorized production asset confirmation, not missing
 schema columns. See `PRODUCTION_APPEND_OPERATOR_CHECKS.md` for owner commands.
 This diagnostic performed no production data writes and did not publish.
 
+A read-only fixed-manifest endpoint is now available in development at
+`/api/append-readiness/october-2026`. Local running-server verification returned
+HTTP 200, `ready: true`, ten verified hashes and `database_accessed: false`.
+Missing, corrupt and unreadable fixture tests passed; the API build/typecheck
+passed. Publish this endpoint, then obtain its JSON report from an authorized
+production browser. It checks the built PDF directory without database rows.
+Do not equate this local result with a production PDF check.
+
 ## Historical readiness evidence (2026-11-02)
 
 The missing-column observations and blocked Publish diff below describe the

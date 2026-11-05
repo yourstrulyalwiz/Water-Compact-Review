@@ -30,6 +30,7 @@ import type {
   JsonRecord,
   ListCandidatesParams,
   ListRelationshipsParams,
+  OctoberAssetReadiness,
   Relationship,
   ReviewEvent,
   ReviewEventInput,
@@ -69,6 +70,84 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetOctoberAppendReadinessUrl = () => {
+
+
+
+
+  return `/api/append-readiness/october-2026`
+}
+
+/**
+ * Uses the same deployment access boundary as other read-only document endpoints. Checks only a fixed manifest; accepts no paths or database inputs.
+ * @summary Verify the ten bundled October PDFs without reading or changing the database
+ */
+export const getOctoberAppendReadiness = async ( options?: Parameters<typeof customFetch>[1]): Promise<OctoberAssetReadiness> => {
+
+  return customFetch<OctoberAssetReadiness>(getGetOctoberAppendReadinessUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOctoberAppendReadinessQueryKey = () => {
+    return [
+    `/api/append-readiness/october-2026`
+    ] as const;
+    }
+
+
+export const getGetOctoberAppendReadinessQueryOptions = <TData = Awaited<ReturnType<typeof getOctoberAppendReadiness>>, TError = ErrorType<void | OctoberAssetReadiness>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOctoberAppendReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOctoberAppendReadinessQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOctoberAppendReadiness>>> = ({ signal }) => getOctoberAppendReadiness({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOctoberAppendReadiness>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOctoberAppendReadinessQueryResult = NonNullable<Awaited<ReturnType<typeof getOctoberAppendReadiness>>>
+export type GetOctoberAppendReadinessQueryError = ErrorType<void | OctoberAssetReadiness>
+
+
+/**
+ * @summary Verify the ten bundled October PDFs without reading or changing the database
+ */
+
+export function useGetOctoberAppendReadiness<TData = Awaited<ReturnType<typeof getOctoberAppendReadiness>>, TError = ErrorType<void | OctoberAssetReadiness>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOctoberAppendReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOctoberAppendReadinessQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getHealthCheckUrl = () => {
 

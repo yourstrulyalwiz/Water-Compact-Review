@@ -5,6 +5,47 @@
  * Water Compact Review API
  * OpenAPI spec version: 0.1.0
  */
+export type OctoberPdfAssetStatus = typeof OctoberPdfAssetStatus[keyof typeof OctoberPdfAssetStatus];
+
+
+export const OctoberPdfAssetStatus = {
+  verified: 'verified',
+  missing: 'missing',
+  hash_mismatch: 'hash_mismatch',
+  unreadable: 'unreadable',
+} as const;
+
+export interface OctoberPdfAsset {
+  document_id: string;
+  country_code: string;
+  expected_sha256: string;
+  /** @nullable */
+  actual_sha256: string | null;
+  /** @nullable */
+  byte_size: number | null;
+  status: OctoberPdfAssetStatus;
+}
+
+export type OctoberAssetReadinessAssetLocation = typeof OctoberAssetReadinessAssetLocation[keyof typeof OctoberAssetReadinessAssetLocation];
+
+
+export const OctoberAssetReadinessAssetLocation = {
+  'bundled-documents': 'bundled-documents',
+} as const;
+
+export interface OctoberAssetReadiness {
+  ready: boolean;
+  read_only: boolean;
+  database_accessed: boolean;
+  checked_at: string;
+  batch_key: string;
+  package_sha256: string;
+  asset_location: OctoberAssetReadinessAssetLocation;
+  expected_documents: number;
+  verified_documents: number;
+  documents: OctoberPdfAsset[];
+}
+
 export interface HealthStatus {
   status: string;
 }

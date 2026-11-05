@@ -9,6 +9,31 @@ import * as zod from 'zod';
 
 
 /**
+ * Uses the same deployment access boundary as other read-only document endpoints. Checks only a fixed manifest; accepts no paths or database inputs.
+ * @summary Verify the ten bundled October PDFs without reading or changing the database
+ */
+export const GetOctoberAppendReadinessResponse = zod.object({
+  "ready": zod.boolean(),
+  "read_only": zod.boolean(),
+  "database_accessed": zod.boolean(),
+  "checked_at": zod.coerce.date(),
+  "batch_key": zod.string(),
+  "package_sha256": zod.string(),
+  "asset_location": zod.enum(['bundled-documents']),
+  "expected_documents": zod.int(),
+  "verified_documents": zod.int(),
+  "documents": zod.array(zod.object({
+  "document_id": zod.string(),
+  "country_code": zod.string(),
+  "expected_sha256": zod.string(),
+  "actual_sha256": zod.string().nullable(),
+  "byte_size": zod.int().nullable(),
+  "status": zod.enum(['verified', 'missing', 'hash_mismatch', 'unreadable'])
+}))
+})
+
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
