@@ -72,20 +72,40 @@ overlap or a changed fingerprint requires investigation, never an upsert.
 
 ## Production approval gate
 
-No production writes or publication were performed while implementing this
-feature. A read-only preflight on 2026-11-02 confirmed the live active dataset is
-`water-compacts-v5-baseline-01`, with 252 candidates and 242 review events at the
-time of the query. The two append-provenance columns are not present in production,
-so the schema prerequisite is NOT satisfied. Recheck these observations before
-rollout; additional human reviews may arrive in the meantime.
+The owner reports applying migration 004 through the production SQL console.
+Fresh read-only checks and the existing production plan on 2026-11-05 confirm
+both provenance columns, the new unique batch index, removal of the single-batch
+rule, all three 14-country checks, and the expanded candidate-ID pattern.
+The active dataset remains `water-compacts-v5-baseline-01`, with 252 candidates,
+four documents and 242 review events. The schema prerequisite is satisfied.
+No production data append has been performed.
+
+Fresh plan and complete-row preservation inventory:
+`generated-artifacts/append-tests/production-resume/{plan.log,before.json}`.
+The validated package proposes 565 candidates, 10 documents, 10 analysis runs,
+723 evidence rows, 813 candidate/evidence links, 3,691 rectangles, 142
+relationships, 615 crosswalks, 282 scan-log rows, 380 QA rows, and 565 initial
+assessments. It creates no human reviews or comments.
+
+A refreshed all-schema backup at 2026-11-05 05:32:53 UTC was archived privately
+and restored into an isolated local database. All 33 complete-row inventories
+and column/constraint/trigger/function definitions matched. Its inventory also
+matches the fresh plan inventory. Ownership/grants were not certified.
+
+Remaining gate: all ten local PDF hashes match; the latest successful production
+build logs confirm copying source PDFs into `dist/documents/`. Authenticated
+production PDF-byte availability remains unverified: requests to the private
+production documents route receive a Replit sign-in redirect. Do not treat the
+build log, workspace PDF checks, or login HTML as a deployed-PDF hash check.
+See `PRODUCTION_APPEND_OPERATOR_CHECKS.md` for current evidence and owner commands.
 
 1. Confirm the deployed database/schema and API use the same active dataset.
 2. Take an all-schema recoverable backup and test a restore in isolation; keep
    an access-controlled review export. Development restore tests are not a
    substitute for a production backup.
-3. For Replit-managed PostgreSQL, inspect and approve the **Publish schema diff**.
-   There is no custom production DDL command. If `compact_v5` changes are absent
-   from that diff, STOP; do not use startup/build DDL or the overwrite-data option.
+3. Recheck the live schema prerequisites. They now pass following the owner's
+   schema operation; an empty Publish diff is no longer the append blocker.
+   Never perform additional DDL from the append command, startup, or build.
 4. Prepare and publish the code/assets separately, then check original countries
    and exact PDF route hashes. A login page with HTTP 200 is not a PDF check.
 5. In an approved operator environment with the deployment's actual connection,
@@ -113,7 +133,7 @@ The integration test at `src/append/append.test.ts` deliberately uses only a
 disposable localhost PostgreSQL database on port 55432 named `compact_append_test`.
 Restore a fresh development fixture there and apply migration 004 before running:
 `cd scripts && pnpm exec tsx src/append/append.test.ts`.
-Never point it at production. Full interactive highlight review and the production
-schema-diff approval and production apply remain operator acceptance gates.
+Never point it at production. Development highlight review passed; production
+PDF acceptance and the production data-only apply remain operational gates.
 The real-production backup restore and append rehearsal subsequently passed;
 see `PRODUCTION_READINESS.md` for the evidence and remaining visual check.

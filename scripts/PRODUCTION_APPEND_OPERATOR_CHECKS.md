@@ -1,12 +1,12 @@
 # Production append: operator checks and data-only commands
 
-## Scope and unresolved gate
+## Scope and current gate
 
 This is a one-time operator checklist, not a production schema migration script.
-It contains no production DDL and does not authorize running migration 004 against
-production. Replit's Agent guidance prohibits preparing or executing a custom
-managed-production schema migration. Owner SQL access is documented, but a
-supported route for this particular migration must be confirmed separately.
+It contains no production DDL. The owner has already applied migration 004;
+fresh live checks on 2026-11-05 confirm its prerequisites now pass. Do not reapply
+schema migrations as part of this operation. The remaining gate is production
+PDF availability; the data-only append has not been performed.
 
 The existing development migration is
 `artifacts/api-server/migrations/004_compact_v5_append.sql`. It remains the exact
@@ -15,17 +15,24 @@ triggers, replace data, activate another dataset, or add build/startup migration
 
 ## Findings when this checklist was prepared
 
-- Fresh managed Publish diff: success, no statements, no warnings, `hasDiff=false`.
 - Fresh production SQL: `neondb`, active dataset
   `water-compacts-v5-baseline-01`, 252 candidates, 242 review events.
-- Both provenance columns remain absent; the three four-country allowlists,
-  old candidate-ID check, and single-batch unique constraint/index remain.
-- Full-row aggregate fingerprints and counts of all 33 tables in the verified
-  2026-11-02 17:06 UTC backup inventory match current production.
-- Consequently no data divergence currently requires replacing that backup.
-  Recheck immediately before any approved write; refresh if data has changed.
-  The earlier isolated restore and append rehearsal remains evidence, not proof
-  of live database permissions. Ownership and grants were not certified.
+- Both nullable provenance columns, all 14-country checks, candidate-ID pattern,
+  checksum check and unique dataset/batch-key index are present. The old
+  single-batch constraint/index are absent.
+- The existing production plan passed and saved a full-row inventory covering
+  all 33 tables and all 242 review events.
+- A refreshed backup captured 2026-11-05 05:32:53 UTC was archived privately and
+  restored in isolation, matching all 33 inventories and schema checks.
+  Its inventory exactly matches the fresh plan inventory.
+- Local hashes of all ten PDFs match; the latest successful production build
+  logs copying source PDFs. The private published documents route redirects
+  unauthenticated requests to Replit sign-in, so deployed-byte checks remain
+  unresolved. Build-copy evidence alone is not a production hash verification.
+- The existing credential reports INSERT privilege on the compact tables.
+  No test write was made; the credential was used only with read-only sessions.
+- The earlier append rehearsal remains valid for unchanged tool/package behavior;
+  ownership and grants remain uncertified by local restore tests.
 - These observations are point-in-time, not a guarantee that reviewers stop
   adding responses after the check.
 
@@ -53,8 +60,9 @@ Stop on an unexpected target, dataset or unexplained discrepancy.
 
 ## 2. Verify schema after a supported schema-only operation
 
-This checklist does not contain that operation. Do not proceed to the append
-merely because a SQL console is available.
+The owner has completed the schema operation and these checks passed during
+preparation. Repeat them if the target or schema changes; do not run another
+schema operation as part of the append.
 
 Run these read-only queries:
 
@@ -118,6 +126,45 @@ configured to the production connection. The ordinary workspace connection is
 development; `--environment production` does NOT select a production database.
 Do not change the application's shared development DATABASE_URL.
 Do not assume the backup credential is authorized for data writes.
+
+The existing `COMPACT_PRODUCTION_BACKUP_URL` secret was successfully used for the
+production read-only plan and fresh backup. If the owner approves reusing that
+credential for the authorized data-only append, this subshell selects it only
+for the operator session; it does not change workspace or deployment settings:
+
+```bash
+(
+  set +x
+  set -e
+  test -n "${COMPACT_PRODUCTION_BACKUP_URL:-}" || {
+    echo "Required production connection secret is unavailable"; exit 1;
+  }
+  export DATABASE_URL="$COMPACT_PRODUCTION_BACKUP_URL"
+  export COMPACT_APPEND_TARGET_ENV=production
+  inventory="../generated-artifacts/append-tests/production-owner-before-$(date -u +%Y%m%dT%H%M%SZ).json"
+  common=(
+    --manifest ../source_package/append-20261020/append-manifest.json
+    --environment production
+    --dataset water-compacts-v5-baseline-01
+    --inventory "$inventory"
+  )
+  pnpm --filter @workspace/scripts run compact:v5:append:plan "${common[@]}"
+  # STOP before apply unless production PDFs and backup requirements are satisfied.
+  read -r -p "Production PDFs verified and data-only append approved? Type APPEND: " approval
+  test "$approval" = APPEND || exit 1
+  pnpm --filter @workspace/scripts run compact:v5:append:apply "${common[@]}" \
+    --expected-database neondb \
+    --expected-package-sha256 70c2790c3fc07527eb8beac1062000a464d9e41547cd4a128018cf10f41e06e3 \
+    --production-approved --backup-restore-verified
+  pnpm --filter @workspace/scripts run compact:v5:append:verify "${common[@]}" \
+    --expected-package-sha256 70c2790c3fc07527eb8beac1062000a464d9e41547cd4a128018cf10f41e06e3
+)
+```
+
+Run from the repository root in Replit Shell only after the outstanding asset
+gate is resolved. Never paste a credential into the command, enable shell
+tracing, or print DATABASE_URL. The prompt is an operator attestation, not an
+automatic asset verification. Do not type APPEND merely because the plan passed.
 
 Confirm compatible application code and exact PDF assets are deployed and
 accessible through authorized production requests. An HTTP 200 login page is

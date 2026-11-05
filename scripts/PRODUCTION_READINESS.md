@@ -1,9 +1,45 @@
-# Compact append readiness — 2026-11-02
+# Compact append readiness — updated 2026-11-05
 
-## Decision: hold production append
+## Current decision: schema passed; hold for production PDF acceptance
 
-Development checks passed, but production is not yet ready for the append.
-This check made no production writes and did not publish the app.
+The owner applied migration 004. Fresh read-only production checks confirm all
+required columns, indexes, country checks and candidate-ID restrictions are ready.
+The existing production plan passed, preserving the active dataset
+`water-compacts-v5-baseline-01`, with 252 candidates, four documents and 242 review
+events. The plan proposes the exact manifest additions; no data append was run.
+
+The fresh preservation inventory is
+`generated-artifacts/append-tests/production-resume/before.json`; its plan is
+`generated-artifacts/append-tests/production-resume/plan.log`.
+All previously backed-up rows match, except the expected old import-batch row
+hash change caused by adding two NULL metadata columns. No missing rows were
+observed. A fresh post-schema backup removes that row-shape ambiguity:
+
+- Captured 2026-11-05 05:32:53 UTC and archived under private
+  `production-backups/2026-11-05T05-32-53-126Z/`.
+- Downloaded dump SHA256:
+  `ca02e7a3cf4b926f1c849b8685cea46766c3a08061c3d571548aae7c83a9d13d`.
+- Isolated restore passed all 33 complete-row inventories and
+  column/constraint/trigger/function comparisons. The temporary recovery server
+  was stopped and removed. Ownership/grants were excluded.
+- The fresh backup inventory exactly equals the fresh plan inventory.
+
+All ten local October PDF hashes match. The latest successful production build
+(`2026-11-02 21:58 UTC`) logs the PDF copy into `dist/documents/`. However, the
+private production `/api/documents` request returned a 307 redirect to Replit's
+sign-in gate. Production PDF byte/hash availability has not been established.
+The new document IDs are also not queryable through document-bound PDF routes
+until their database rows exist; absence of pre-append rows is not proof of
+missing files. No public path, temporary document rows, or access bypass was added.
+
+The remaining gate is authorized production asset confirmation, not missing
+schema columns. See `PRODUCTION_APPEND_OPERATOR_CHECKS.md` for owner commands.
+This diagnostic performed no production data writes and did not publish.
+
+## Historical readiness evidence (2026-11-02)
+
+The missing-column observations and blocked Publish diff below describe the
+earlier state only. The schema blocker was superseded by the live checks above.
 
 ## Confirmed by read-only production queries
 
