@@ -20,10 +20,20 @@ const GLOBAL_DECISIONS = ['Approve', 'Revise', 'Reject', 'Consolidate', 'Needs D
 const REGIONAL_DECISIONS = ['Confirm', 'Confirm with Revision', 'Disagree', 'Needs Discussion', 'Pending'];
 const FINAL_STATUSES = ['Approved Reform', 'Rejected Non-reform', 'Consolidated', 'Pending'];
 const COUNTRIES = [
-  { code: 'KHM', name: 'Cambodia', short: 'Cambodia' },
-  { code: 'SLE', name: 'Sierra Leone', short: 'Sierra Leone' },
-  { code: 'JAM', name: 'Jamaica', short: 'Jamaica' },
-  { code: 'COD', name: 'Democratic Republic of the Congo', short: 'DRC' },
+  { code: 'KHM', name: 'Cambodia' },
+  { code: 'SLE', name: 'Sierra Leone' },
+  { code: 'JAM', name: 'Jamaica' },
+  { code: 'COD', name: 'Democratic Republic of the Congo' },
+  { code: 'AGO', name: 'Angola' },
+  { code: 'BOL', name: 'Bolivia' },
+  { code: 'BDI', name: 'Burundi' },
+  { code: 'CIV', name: 'Côte d’Ivoire' },
+  { code: 'GIN', name: 'Guinea' },
+  { code: 'MOZ', name: 'Mozambique' },
+  { code: 'SEN', name: 'Senegal' },
+  { code: 'TGO', name: 'Togo' },
+  { code: 'UZB', name: 'Uzbekistan' },
+  { code: 'ZMB', name: 'Zambia' },
 ];
 const CRITERIA = [
   ['C1', 'Explicit commitment'],
@@ -222,7 +232,7 @@ export default function Workspace() {
     const observed = new Map<string, string>();
     for (const candidate of allCandidates) {
       const code = countryCode(candidate);
-      if (code) observed.set(code, code === 'COD' ? 'DRC' : COUNTRIES.find(c => c.code === code)?.short || getCountry(candidate) || code);
+      if (code) observed.set(code, COUNTRIES.find(c => c.code === code)?.name || getCountry(candidate) || code);
     }
     return [...observed.entries()];
   }, [allCandidates]);
