@@ -4,6 +4,33 @@ These tools append data to the **existing active dataset**. They do not activate
 datasets, change existing rows, create human reviews, or run schema migrations.
 Never replace production with development data.
 
+## October production batch completed — 2026-11-05
+
+The authorized production data-only append completed and passed the existing
+verification command. Production now contains **817 candidates, 14 documents,
+and 242 review events** in the unchanged active dataset
+`water-compacts-v5-baseline-01`. All predecessor row hashes across all 33 tables
+match the fresh pre-append inventory, including all review decisions/comments.
+The ten production PDF hashes were confirmed by the owner's deployed checker
+report before applying. No schema change or UI change was made by this append.
+
+Batch: `water-compacts-append-20261020-ten-countries-v1`.
+Package fingerprint:
+`70c2790c3fc07527eb8beac1062000a464d9e41547cd4a128018cf10f41e06e3`.
+The post-append read-only plan returns `already-applied`, with no further additions.
+Do not create a new batch key or modify the package to run it again.
+
+Private evidence is retained under
+`generated-artifacts/append-tests/production-approved/`: production PDF report,
+fresh before/after inventories, preflight summary, apply/verify logs and
+`completion.json`. The verified pre-append backup is archived in private storage
+under `production-backups/2026-11-05T05-32-53-126Z/`.
+
+The operational gates below record the procedure used, not outstanding blockers.
+Future batches need a new manifest, a fresh target inventory and backup coverage.
+The one-off backup rehearsal helper pins the original 252-candidate, single-batch
+state and must not be run unchanged against this now-expanded production dataset.
+
 ## Package and assets
 
 The October package is assembled at `source_package/append-20261020/`.
@@ -70,7 +97,7 @@ before commit. A completed matching batch is verified and returns `already-appli
 including after later human decisions and assessment revisions. Existing-country
 overlap or a changed fingerprint requires investigation, never an upsert.
 
-## Production approval gate
+## Production approval gate — historical pre-append evidence
 
 The owner reports applying migration 004 through the production SQL console.
 Fresh read-only checks and the existing production plan on 2026-11-05 confirm

@@ -15,6 +15,8 @@ not created yet. Use a fixed-manifest, read-only check of deployed file bytes.
 **Why:** Document-bound download routes cannot prove that incoming PDFs exist
 before their metadata is imported. Adding temporary production rows would
 unnecessarily compromise the read-only preflight.
+The owner confirmed that a deployed fixed-manifest checker successfully resolved
+this pre-append verification gap for the private app.
 
 **How to apply:** Verify bundled deployment assets independently of the database;
 do not let a workspace fallback hide missing production files, and do not treat

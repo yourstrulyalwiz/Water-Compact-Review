@@ -1,5 +1,17 @@
 # Production append: operator checks and data-only commands
 
+## October operation completed — do not rerun as a new batch
+
+The authorized append and postflight verification completed on 2026-11-05.
+Production has 817 candidates, 14 documents and all 242 existing review events.
+Full-row predecessor preservation passed across all 33 tables and the active
+dataset is unchanged. The owner's production checker report satisfied the
+ten-PDF hash gate before execution. A read-only repeat plan is `already-applied`.
+
+The commands and unresolved-gate notes below are retained as the historical
+procedure; they are not instructions to append another copy. Completion evidence:
+`generated-artifacts/append-tests/production-approved/completion.json`.
+
 ## Scope and current gate
 
 This is a one-time operator checklist, not a production schema migration script.

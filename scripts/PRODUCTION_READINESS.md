@@ -1,6 +1,36 @@
 # Compact append readiness — updated 2026-11-05
 
-## Current decision: schema passed; hold for production PDF acceptance
+## Current status: production append completed and verified
+
+Completed 2026-11-05 at approximately 05:47 UTC using the existing, explicitly
+authorized data-only append command. No additional DDL or UI changes were made.
+
+| Production measure | Before | After |
+|---|---:|---:|
+| Candidates | 252 | 817 |
+| Documents | 4 | 14 |
+| Review events | 242 | 242 |
+
+- Active dataset remains `water-compacts-v5-baseline-01`.
+- Every pre-existing inventory entry across all 33 tables is unchanged: zero
+  modified/missing predecessor rows, including all review decisions and comments.
+- Exact manifest additions and immutable imported content passed verification.
+- The owner's production asset-check response verified all ten deployed PDF hashes
+  against the pinned package; it was not a development-preview result.
+- The fresh preflight inventory exactly matched the snapshot/restore-verified
+  backup captured 2026-11-05 05:32:53 UTC, so no intervening unbacked data was found.
+- A post-append read-only plan reports `already-applied`, no additions and no
+  changes to existing rows.
+- Evidence: `generated-artifacts/append-tests/production-approved/`, including
+  `completion.json`, before/after inventories, owner PDF report and apply/verify logs.
+- The earlier first-run human-review CSV was not imported, overwritten or altered.
+
+No further publish or second append is required for these database additions.
+Production UI/export browser acceptance was not independently repeated because
+the deployment is private; the full data, asset report and preservation checks
+above are the verified results. Refresh the published app to load the new data.
+
+## Historical pre-append readiness — resolved
 
 The owner applied migration 004. Fresh read-only production checks confirm all
 required columns, indexes, country checks and candidate-ID restrictions are ready.
